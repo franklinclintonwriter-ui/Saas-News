@@ -7,6 +7,7 @@ param(
 
   [string]$PublicProject = "phulpur-magazine",
   [string]$PublicDomain = "phulpur.net",
+  [string[]]$PublicAliases = @("www.phulpur.net"),
   [string]$AdminProject = "phulpur-admin",
   [string]$AdminDomain = "admin.phulpur.org"
 )
@@ -40,4 +41,7 @@ function Add-PagesDomain {
 }
 
 Add-PagesDomain -Project $PublicProject -Domain $PublicDomain
+foreach ($alias in $PublicAliases) {
+  Add-PagesDomain -Project $PublicProject -Domain $alias
+}
 Add-PagesDomain -Project $AdminProject -Domain $AdminDomain
