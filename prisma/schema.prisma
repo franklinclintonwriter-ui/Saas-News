@@ -1,0 +1,326 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  role         String    @default("AUTHOR")
+  status       String    @default("ACTIVE")
+  title        String    @default("")
+  bio          String    @default("")
+  avatarUrl    String    @default("")
+  location     String    @default("")
+  websiteUrl   String    @default("")
+  twitterUrl   String    @default("")
+  linkedinUrl  String    @default("")
+  facebookUrl  String    @default("")
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  posts        Post[]
+  media        MediaAsset[]
+  sessions     Session[]
+}
+
+model Session {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  ipHash    String?
+  userAgent String?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  description String   @default("")
+  color       String   @default("#194890")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  posts       Post[]
+}
+
+model Tag {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  slug      String    @unique
+  color     String    @default("#194890")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  posts     PostTag[]
+}
+
+model PostTag {
+  postId String
+  tagId  String
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([postId, tagId])
+}
+
+model Post {
+  id              String      @id @default(cuid())
+  title           String
+  slug            String      @unique
+  excerpt         String      @default("")
+  content         String
+  status          String      @default("DRAFT")
+  featured        Boolean     @default(false)
+  breaking        Boolean     @default(false)
+  seoTitle        String      @default("")
+  metaDescription String      @default("")
+  focusKeyword    String      @default("")
+  canonicalUrl    String      @default("")
+  readTime        String      @default("")
+  views           Int         @default(0)
+  scheduledAt     DateTime?
+  publishedAt     DateTime?
+  deletedAt       DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  authorId        String
+  categoryId      String
+  featuredImageId String?
+  author          User        @relation(fields: [authorId], references: [id])
+  category        Category    @relation(fields: [categoryId], references: [id])
+  featuredImage   MediaAsset? @relation(fields: [featuredImageId], references: [id], onDelete: SetNull)
+  tags            PostTag[]
+  comments        Comment[]
+
+  @@index([status, publishedAt])
+  @@index([categoryId])
+  @@index([authorId])
+  @@index([deletedAt])
+}
+
+model MediaAsset {
+  id         String   @id @default(cuid())
+  name       String
+  alt        String   @default("")
+  url        String
+  mime       String
+  sizeBytes  Int
+  width      Int      @default(0)
+  height     Int      @default(0)
+  uploadedAt DateTime @default(now())
+  uploaderId String?
+  uploader   User?    @relation(fields: [uploaderId], references: [id], onDelete: SetNull)
+  posts      Post[]
+
+  @@index([mime])
+  @@index([uploaderId])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  postId    String
+  author    String
+  email     String
+  content   String
+  status    String   @default("PENDING")
+  ipHash    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId, status])
+  @@index([email])
+}
+
+model SiteSetting {
+  id                     String   @id @default("site")
+  siteTitle              String   @default("Phulpur24")
+  tagline                String   @default("Verified local news, analysis, and updates from Phulpur")
+  logoUrl                String   @default("")
+  logoAlt                String   @default("")
+  logoHeight             Int      @default(40)
+  showHeaderLogo         Boolean  @default(true)
+  showSiteTitle          Boolean  @default(true)
+  showFooterLogo         Boolean  @default(true)
+  showFooterSiteTitle    Boolean  @default(true)
+  faviconUrl             String   @default("")
+  ogImageUrl             String   @default("")
+  siteUrl                String   @default("http://localhost:5174")
+  organizationName       String   @default("Phulpur24")
+  defaultSeoTitle        String   @default("Phulpur24 - Local News, Analysis and Updates")
+  defaultMetaDescription String   @default("")
+  defaultKeywords        String   @default("")
+  twitterHandle          String   @default("")
+  googleSiteVerification String   @default("")
+  bingSiteVerification   String   @default("")
+  robotsIndex            Boolean  @default(true)
+  robotsFollow           Boolean  @default(true)
+  structuredDataEnabled  Boolean  @default(true)
+  schemaType             String   @default("NewsMediaOrganization")
+  primaryColor           String   @default("#194890")
+  accentColor            String   @default("#DC2626")
+  headerBackground       String   @default("#FFFFFF")
+  footerBackground       String   @default("#0B1220")
+  facebook               String   @default("")
+  twitter                String   @default("")
+  instagram              String   @default("")
+  linkedin               String   @default("")
+  copyright              String   @default("(c) 2026 Phulpur24. All rights reserved.")
+  footerAbout            String   @default("")
+  gaId                   String   @default("")
+  fbPixel                String   @default("")
+  customTracking         String   @default("")
+  contactEmail           String   @default("contact@phulpur24.com")
+  supportEmail           String   @default("support@phulpur24.com")
+  pressEmail             String   @default("press@phulpur24.com")
+  advertisingEmail       String   @default("ads@phulpur24.com")
+  tipsEmail              String   @default("tips@phulpur24.com")
+  phone                  String   @default("")
+  address                String   @default("")
+  businessHours          String   @default("Mon-Fri 9am-6pm EST")
+  officeLocations        String   @default("")
+  newsletterFromName     String   @default("Phulpur24 Team")
+  newsletterFromEmail    String   @default("newsletter@phulpur24.com")
+  newsletterEnabled      Boolean  @default(true)
+  dailyDigest            Boolean  @default(false)
+  updatedAt              DateTime @updatedAt
+}
+
+model NewsletterSubscriber {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  source    String   @default("website")
+  status    String   @default("ACTIVE")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model StaticPage {
+  id              String   @id @default(cuid())
+  slug            String   @unique
+  title           String
+  excerpt         String   @default("")
+  content         String
+  status          String   @default("PUBLISHED")
+  seoTitle        String   @default("")
+  metaDescription String   @default("")
+  updatedAt       DateTime @updatedAt
+  createdAt       DateTime @default(now())
+
+  @@index([status])
+}
+
+model ContactMessage {
+  id         String    @id @default(cuid())
+  firstName  String
+  lastName   String
+  email      String
+  subject    String
+  message    String
+  status     String    @default("NEW")
+  ipHash     String?
+  userAgent  String?
+  resolvedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([status, createdAt])
+  @@index([email])
+}
+
+model AdPlacement {
+  id        String    @id @default(cuid())
+  key       String    @unique
+  name      String
+  placement String
+  label     String    @default("Advertisement")
+  imageUrl  String    @default("")
+  targetUrl String    @default("")
+  html      String    @default("")
+  enabled   Boolean   @default(true)
+  startsAt  DateTime?
+  endsAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([placement, enabled])
+}
+
+model NavigationItem {
+  id        String   @id @default(cuid())
+  label     String
+  href      String
+  location  String   @default("HEADER")
+  position  Int      @default(0)
+  external  Boolean  @default(false)
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([location, enabled, position])
+}
+
+model AnalyticsSnapshot {
+  id            String   @id @default(cuid())
+  date          DateTime @unique
+  views         Int      @default(0)
+  visitors      Int      @default(0)
+  sessions      Int      @default(0)
+  activeUsers   Int      @default(0)
+  avgLoadMs     Int      @default(0)
+  direct        Int      @default(0)
+  search        Int      @default(0)
+  social        Int      @default(0)
+  referral      Int      @default(0)
+  desktopUsers  Int      @default(0)
+  mobileUsers   Int      @default(0)
+  tabletUsers   Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([date])
+}
+
+model IntegrationSecret {
+  id               String   @id @default(cuid())
+  provider         String   @unique
+  label            String
+  category         String   @default("GENERAL")
+  enabled          Boolean  @default(true)
+  secretCiphertext String   @default("")
+  secretPreview    String   @default("")
+  model            String   @default("")
+  endpoint         String   @default("")
+  notes            String   @default("")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([category, enabled])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actorEmail String
+  action     String
+  resource   String
+  resourceId String?
+  detail     String?
+  ipHash     String?
+  at         DateTime @default(now())
+
+  @@index([resource, resourceId])
+  @@index([actorEmail])
+  @@index([at])
+}

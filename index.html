@@ -1,0 +1,31 @@
+
+  <!DOCTYPE html>
+  <html lang="en">
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+      <title>Phulpur24</title>
+      <script>
+        (() => {
+          try {
+            const mode = localStorage.getItem('phulpur24_theme_mode') || 'system';
+            const isDark = mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            document.documentElement.classList.toggle('dark', isDark);
+            document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
+            document.documentElement.dataset.themeMode = mode;
+            document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+          } catch {
+            document.documentElement.dataset.themeMode = 'system';
+          }
+        })();
+      </script>
+      <style>html, body { height: 100%; margin: 0; } #root { height: 100%; }</style>
+    </head>
+
+    <body>
+      <div id="root"></div>
+      <script type="module" src="/src/main.tsx"></script>
+    </body>
+  </html>
+  
