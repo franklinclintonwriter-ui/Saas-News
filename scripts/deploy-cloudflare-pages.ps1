@@ -6,7 +6,8 @@ param(
   [string]$CloudflareAccountId,
 
   [string]$ProjectName = "phulpur24",
-  [string]$ApiBaseUrl = "https://api.your-domain.com/api",
+  [string]$ApiBaseUrl = "/api",
+  [string]$BackendOrigin = "https://api.your-domain.com",
   [string]$Branch = "main"
 )
 
@@ -15,6 +16,7 @@ $ErrorActionPreference = "Stop"
 $env:CLOUDFLARE_API_TOKEN = $CloudflareApiToken
 $env:CLOUDFLARE_ACCOUNT_ID = $CloudflareAccountId
 $env:VITE_API_BASE_URL = $ApiBaseUrl
+$env:BACKEND_ORIGIN = $BackendOrigin
 
 npm ci
 npm run build
