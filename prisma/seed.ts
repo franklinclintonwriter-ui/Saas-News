@@ -1,13 +1,10 @@
 import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
-import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../api/src/prisma-client.js';
 
 dotenv.config();
 
-const prisma = new PrismaClient({
-  adapter: new PrismaBetterSqlite3({ url: process.env.DATABASE_URL ?? 'file:./dev.db' }),
-});
+const prisma = createPrismaClient();
 
 function slugify(input: string): string {
   return input

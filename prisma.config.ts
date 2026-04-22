@@ -8,6 +8,6 @@ export default defineConfig({
     seed: 'tsx prisma/seed.ts',
   },
   datasource: {
-    url: process.env.DATABASE_URL ?? 'file:./dev.db',
+    url: process.env.DATABASE_URL ?? 'mysql://user:password@127.0.0.1:3306/phulpur24',
   },
 });
