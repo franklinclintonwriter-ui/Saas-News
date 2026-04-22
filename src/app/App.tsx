@@ -42,6 +42,10 @@ function RouteFallback() {
   return <div className="min-h-[40vh] bg-white px-4 py-12 text-center text-sm text-[#6B7280]">Loading...</div>;
 }
 
+const appSurface = (import.meta.env.VITE_APP_SURFACE as string | undefined) || 'all';
+const publicEnabled = appSurface !== 'admin';
+const adminEnabled = appSurface !== 'public';
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -51,57 +55,65 @@ export default function App() {
             <AppToaster />
             <Suspense fallback={<RouteFallback />}>
               <Routes>
-                <Route path="/login" element={<LoginPage />} />
+                {adminEnabled ? <Route path="/login" element={<LoginPage />} /> : null}
 
-              <Route path="/" element={<PublicLayout />}>
-                <Route index element={<HomePage />} />
-                <Route path="article/:id" element={<ArticlePage />} />
-                <Route path="category/:slug" element={<CategoryPage />} />
-                <Route path="search" element={<SearchPage />} />
-                <Route path="about" element={<AboutPage />} />
-                <Route path="contact" element={<ContactPage />} />
-                <Route path="privacy" element={<PrivacyPage />} />
-                <Route path="terms" element={<TermsPage />} />
-                <Route path="page/:slug" element={<StaticContentPage />} />
-              </Route>
+              {publicEnabled ? (
+                <Route path="/" element={<PublicLayout />}>
+                  <Route index element={<HomePage />} />
+                  <Route path="article/:id" element={<ArticlePage />} />
+                  <Route path="category/:slug" element={<CategoryPage />} />
+                  <Route path="search" element={<SearchPage />} />
+                  <Route path="about" element={<AboutPage />} />
+                  <Route path="contact" element={<ContactPage />} />
+                  <Route path="privacy" element={<PrivacyPage />} />
+                  <Route path="terms" element={<TermsPage />} />
+                  <Route path="page/:slug" element={<StaticContentPage />} />
+                </Route>
+              ) : (
+                <Route path="/" element={<Navigate to="/admin" replace />} />
+              )}
 
-              <Route
-                path="/admin/preview/post/:id"
-                element={
-                  <RequireAdminAuth>
-                    <PostPreview />
-                  </RequireAdminAuth>
-                }
-              />
+              {adminEnabled ? (
+                <Route
+                  path="/admin/preview/post/:id"
+                  element={
+                    <RequireAdminAuth>
+                      <PostPreview />
+                    </RequireAdminAuth>
+                  }
+                />
+              ) : null}
 
-              <Route
-                path="/admin"
-                element={
-                  <RequireAdminAuth>
-                    <AdminLayout />
-                  </RequireAdminAuth>
-                }
-              >
-                <Route index element={<Navigate to="/admin/dashboard" replace />} />
-                <Route path="dashboard" element={<Dashboard />} />
-                <Route path="posts" element={<PostsManager />} />
-                <Route path="posts/new" element={<PostEditor />} />
-                <Route path="posts/edit/:id" element={<PostEditor />} />
-                <Route path="pages" element={<PagesManager />} />
-                <Route path="categories" element={<Categories />} />
-                <Route path="tags" element={<Tags />} />
-                <Route path="media" element={<MediaLibrary />} />
-                <Route path="comments" element={<Comments />} />
-                <Route path="contact" element={<ContactInbox />} />
-                <Route path="newsletter" element={<NewsletterManager />} />
-                <Route path="ads" element={<AdsManager />} />
-                <Route path="navigation" element={<NavigationManager />} />
-                <Route path="analytics" element={<Analytics />} />
-                <Route path="audit-log" element={<AuditLog />} />
-                <Route path="users" element={<Users />} />
-                <Route path="settings" element={<Settings />} />
-                <Route path="api-config" element={<ApiConfig />} />
-              </Route>
+              {adminEnabled ? (
+                <Route
+                  path="/admin"
+                  element={
+                    <RequireAdminAuth>
+                      <AdminLayout />
+                    </RequireAdminAuth>
+                  }
+                >
+                  <Route index element={<Navigate to="/admin/dashboard" replace />} />
+                  <Route path="dashboard" element={<Dashboard />} />
+                  <Route path="posts" element={<PostsManager />} />
+                  <Route path="posts/new" element={<PostEditor />} />
+                  <Route path="posts/edit/:id" element={<PostEditor />} />
+                  <Route path="pages" element={<PagesManager />} />
+                  <Route path="categories" element={<Categories />} />
+                  <Route path="tags" element={<Tags />} />
+                  <Route path="media" element={<MediaLibrary />} />
+                  <Route path="comments" element={<Comments />} />
+                  <Route path="contact" element={<ContactInbox />} />
+                  <Route path="newsletter" element={<NewsletterManager />} />
+                  <Route path="ads" element={<AdsManager />} />
+                  <Route path="navigation" element={<NavigationManager />} />
+                  <Route path="analytics" element={<Analytics />} />
+                  <Route path="audit-log" element={<AuditLog />} />
+                  <Route path="users" element={<Users />} />
+                  <Route path="settings" element={<Settings />} />
+                  <Route path="api-config" element={<ApiConfig />} />
+                </Route>
+              ) : null}
 
                 <Route path="*" element={<NotFoundPage />} />
               </Routes>

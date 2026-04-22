@@ -6,7 +6,13 @@
   "scripts": {
     "build": "vite build",
     "build:cloudflare": "vite build",
+    "build:public": "node scripts/build-surface.mjs public",
+    "build:admin": "node scripts/build-surface.mjs admin",
+    "build:all": "node scripts/build-surface.mjs all",
     "deploy:cloudflare": "npx wrangler@latest pages deploy dist --project-name phulpur24 --branch main",
+    "deploy:public": "npm run build:public && npx wrangler@latest pages deploy dist --project-name phulpur-magazine --branch main",
+    "deploy:admin": "npm run build:admin && npx wrangler@latest pages deploy dist --project-name phulpur-admin --branch main",
+    "deploy:production-pages": "npm run deploy:public && npm run deploy:admin",
     "dev": "vite",
     "api:dev": "tsx watch api/src/server.ts",
     "api:start": "tsx api/src/server.ts",
