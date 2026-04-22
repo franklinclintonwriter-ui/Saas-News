@@ -116,6 +116,26 @@ try {
     }
   }
 
+  const mediaAssetExists = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'MediaAsset'")
+    .get();
+  if (mediaAssetExists) {
+    const columns = new Set(
+      db.prepare('PRAGMA table_info("MediaAsset")').all().map((row: any) => row.name as string),
+    );
+    const additiveColumns = [
+      ['storageProvider', 'TEXT NOT NULL DEFAULT \'inline\''],
+      ['storageKey', 'TEXT NOT NULL DEFAULT \'\''],
+    ] as const;
+
+    for (const [name, definition] of additiveColumns) {
+      if (!columns.has(name)) {
+        db.exec(`ALTER TABLE "MediaAsset" ADD COLUMN "${name}" ${definition}`);
+        console.log(`Added MediaAsset.${name}`);
+      }
+    }
+  }
+
   db.exec(`
 CREATE TABLE IF NOT EXISTS "StaticPage" (
   "id" TEXT NOT NULL PRIMARY KEY,

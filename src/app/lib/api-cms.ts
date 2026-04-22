@@ -214,8 +214,24 @@ function mapApiMedia(media: ApiMedia): AdminMedia {
     sizeBytes: media.sizeBytes,
     width: media.width,
     height: media.height,
+    storageProvider: media.storageProvider,
+    storageKey: media.storageKey,
     uploadedAt: iso(media.uploadedAt) ?? new Date().toISOString(),
   };
+}
+
+export async function uploadAdminMediaFile(
+  file: File,
+  token: string,
+  dimensions: { width?: number; height?: number } = {},
+): Promise<AdminMedia> {
+  const body = new FormData();
+  body.set('file', file);
+  body.set('alt', file.name.replace(/\.[^.]+$/, ''));
+  if (dimensions.width) body.set('width', String(dimensions.width));
+  if (dimensions.height) body.set('height', String(dimensions.height));
+  const media = await apiRequest<ApiMedia>('/admin/media/upload', { method: 'POST', token, body });
+  return mapApiMedia(media);
 }
 
 function mapApiUser(user: ApiUser): AdminUser {

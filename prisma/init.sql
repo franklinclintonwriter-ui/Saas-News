@@ -102,6 +102,8 @@ CREATE TABLE "MediaAsset" (
     "sizeBytes" INTEGER NOT NULL,
     "width" INTEGER NOT NULL DEFAULT 0,
     "height" INTEGER NOT NULL DEFAULT 0,
+    "storageProvider" TEXT NOT NULL DEFAULT 'inline',
+    "storageKey" TEXT NOT NULL DEFAULT '',
     "uploadedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "uploaderId" TEXT,
     CONSTRAINT "MediaAsset_uploaderId_fkey" FOREIGN KEY ("uploaderId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE

@@ -71,6 +71,8 @@ export type AdminMedia = {
   sizeBytes: number;
   width: number;
   height: number;
+  storageProvider?: string;
+  storageKey?: string;
   uploadedAt: string;
 };
 

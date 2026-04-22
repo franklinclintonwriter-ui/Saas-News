@@ -7,23 +7,23 @@ datasource db {
 }
 
 model User {
-  id           String    @id @default(cuid())
+  id           String       @id @default(cuid())
   name         String
-  email        String    @unique
+  email        String       @unique
   passwordHash String
-  role         String    @default("AUTHOR")
-  status       String    @default("ACTIVE")
-  title        String    @default("")
-  bio          String    @default("")
-  avatarUrl    String    @default("")
-  location     String    @default("")
-  websiteUrl   String    @default("")
-  twitterUrl   String    @default("")
-  linkedinUrl  String    @default("")
-  facebookUrl  String    @default("")
+  role         String       @default("AUTHOR")
+  status       String       @default("ACTIVE")
+  title        String       @default("")
+  bio          String       @default("")
+  avatarUrl    String       @default("")
+  location     String       @default("")
+  websiteUrl   String       @default("")
+  twitterUrl   String       @default("")
+  linkedinUrl  String       @default("")
+  facebookUrl  String       @default("")
   lastLoginAt  DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
   posts        Post[]
   media        MediaAsset[]
   sessions     Session[]
@@ -110,18 +110,20 @@ model Post {
 }
 
 model MediaAsset {
-  id         String   @id @default(cuid())
-  name       String
-  alt        String   @default("")
-  url        String
-  mime       String
-  sizeBytes  Int
-  width      Int      @default(0)
-  height     Int      @default(0)
-  uploadedAt DateTime @default(now())
-  uploaderId String?
-  uploader   User?    @relation(fields: [uploaderId], references: [id], onDelete: SetNull)
-  posts      Post[]
+  id              String   @id @default(cuid())
+  name            String
+  alt             String   @default("")
+  url             String
+  mime            String
+  sizeBytes       Int
+  width           Int      @default(0)
+  height          Int      @default(0)
+  storageProvider String   @default("inline")
+  storageKey      String   @default("")
+  uploadedAt      DateTime @default(now())
+  uploaderId      String?
+  uploader        User?    @relation(fields: [uploaderId], references: [id], onDelete: SetNull)
+  posts           Post[]
 
   @@index([mime])
   @@index([uploaderId])
@@ -272,22 +274,22 @@ model NavigationItem {
 }
 
 model AnalyticsSnapshot {
-  id            String   @id @default(cuid())
-  date          DateTime @unique
-  views         Int      @default(0)
-  visitors      Int      @default(0)
-  sessions      Int      @default(0)
-  activeUsers   Int      @default(0)
-  avgLoadMs     Int      @default(0)
-  direct        Int      @default(0)
-  search        Int      @default(0)
-  social        Int      @default(0)
-  referral      Int      @default(0)
-  desktopUsers  Int      @default(0)
-  mobileUsers   Int      @default(0)
-  tabletUsers   Int      @default(0)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String   @id @default(cuid())
+  date         DateTime @unique
+  views        Int      @default(0)
+  visitors     Int      @default(0)
+  sessions     Int      @default(0)
+  activeUsers  Int      @default(0)
+  avgLoadMs    Int      @default(0)
+  direct       Int      @default(0)
+  search       Int      @default(0)
+  social       Int      @default(0)
+  referral     Int      @default(0)
+  desktopUsers Int      @default(0)
+  mobileUsers  Int      @default(0)
+  tabletUsers  Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([date])
 }

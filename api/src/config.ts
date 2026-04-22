@@ -25,20 +25,55 @@ const devCorsOrigins = [
   'http://localhost:5174',
 ];
 
+const port = readNumber('API_PORT', 4102);
+
+function trimTrailingSlash(value: string): string {
+  return value.trim().replace(/\/+$/, '');
+}
+
+function normalizeR2Endpoint(raw: string | undefined, bucket: string): string {
+  if (!raw?.trim()) return '';
+  try {
+    const url = new URL(raw.trim());
+    const parts = url.pathname.split('/').filter(Boolean);
+    if (parts.length === 1 && parts[0] === bucket) {
+      url.pathname = '/';
+    }
+    url.search = '';
+    url.hash = '';
+    return trimTrailingSlash(url.toString());
+  } catch {
+    return trimTrailingSlash(raw);
+  }
+}
+
+const r2Bucket = process.env.R2_BUCKET?.trim() || '';
+
 export const config = {
   nodeEnv: process.env.NODE_ENV ?? 'development',
-  port: readNumber('API_PORT', 4102),
+  port,
+  apiPublicUrl: trimTrailingSlash(process.env.API_PUBLIC_URL || `http://127.0.0.1:${port}/api`),
   corsOrigins: readList('CORS_ORIGIN', devCorsOrigins),
   jwtSecret: process.env.JWT_SECRET ?? devAccessSecret,
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET ?? devRefreshSecret,
   accessTokenTtl: process.env.ACCESS_TOKEN_TTL ?? '15m',
   refreshTokenDays: readNumber('REFRESH_TOKEN_DAYS', 30),
   maxJsonBody: process.env.API_MAX_JSON_BODY ?? '15mb',
+  mediaUploadMaxBytes: readNumber('MEDIA_UPLOAD_MAX_BYTES', 25 * 1024 * 1024),
   integrationSecretKey:
     process.env.INTEGRATION_SECRET_KEY?.trim() ||
     process.env.JWT_REFRESH_SECRET?.trim() ||
     process.env.JWT_SECRET?.trim() ||
     devRefreshSecret,
+  r2: {
+    accountId: process.env.CLOUDFLARE_ACCOUNT_ID?.trim() || '',
+    bucket: r2Bucket,
+    endpoint: normalizeR2Endpoint(process.env.R2_ENDPOINT, r2Bucket),
+    accessKeyId: process.env.R2_ACCESS_KEY_ID?.trim() || '',
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY?.trim() || '',
+    publicBaseUrl: trimTrailingSlash(process.env.R2_PUBLIC_BASE_URL || ''),
+    objectPrefix: (process.env.R2_OBJECT_PREFIX?.trim() || 'media').replace(/^\/+|\/+$/g, ''),
+  },
   /** AI providers (optional; routes return clear errors if missing for chosen provider) */
   openaiApiKey: process.env.OPENAI_API_KEY?.trim() || '',
   anthropicApiKey: process.env.ANTHROPIC_API_KEY?.trim() || '',

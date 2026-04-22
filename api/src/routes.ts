@@ -1,5 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { Router } from 'express';
+import multer from 'multer';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import {
   authenticate,
@@ -12,10 +14,12 @@ import {
   signAccessToken,
   verifyPassword,
 } from './auth.js';
+import { config } from './config.js';
 import { badRequest, forbidden, notFound, unauthorized } from './errors.js';
 import { aiCapabilities, generateNewsDraft, generatePostImageAsset, parseKeywords } from './ai-news.js';
 import { deleteIntegrationConfig, listIntegrationConfigs, saveIntegrationConfig } from './integrations.js';
 import { prisma } from './prisma.js';
+import { deleteStoredMedia, getStoredMedia, storageStatus, storeDataUrlMedia, storeMediaBuffer } from './storage.js';
 import { asyncHandler, created, hashIp, idParamSchema, ok, safeUser, slugify, writeAudit } from './utils.js';
 import {
   adPlacementSchema,
@@ -51,6 +55,13 @@ import {
 } from './validation.js';
 
 const router = Router();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: config.mediaUploadMaxBytes,
+    files: 1,
+  },
+});
 
 const postInclude = {
   author: {
@@ -307,8 +318,35 @@ function publicAdWhere() {
 }
 
 router.get('/health', (_req, res) => {
-  ok(res, { status: 'healthy', service: 'phulpur24-api', time: new Date().toISOString() });
+  ok(res, { status: 'healthy', service: 'phulpur24-api', time: new Date().toISOString(), storage: storageStatus() });
 });
+
+router.get('/media/:id/file', asyncHandler(async (req, res) => {
+  const media = await prisma.mediaAsset.findUnique({ where: { id: paramString(req.params.id) } });
+  if (!media) notFound('Media asset not found.');
+
+  if (media.storageProvider === 'r2' && media.storageKey) {
+    const object = await getStoredMedia(media.storageKey);
+    res.setHeader('Content-Type', object.contentType || media.mime || 'application/octet-stream');
+    if (object.contentLength !== undefined) res.setHeader('Content-Length', String(object.contentLength));
+    res.setHeader('Cache-Control', object.cacheControl || 'public, max-age=31536000, immutable');
+    object.body.pipe(res);
+    return;
+  }
+
+  if (media.url.startsWith('data:image/')) {
+    const match = /^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i.exec(media.url);
+    if (!match) badRequest('Stored media data URL is invalid.');
+    const buffer = Buffer.from(match[2]!, 'base64');
+    res.setHeader('Content-Type', match[1]!);
+    res.setHeader('Content-Length', String(buffer.byteLength));
+    res.setHeader('Cache-Control', 'public, max-age=604800');
+    res.end(buffer);
+    return;
+  }
+
+  res.redirect(media.url);
+}));
 
 router.post(
   '/auth/login',
@@ -1018,14 +1056,71 @@ router.delete('/admin/tags/:id', requireRole('EDITOR'), asyncHandler(async (req,
 }));
 
 router.get('/admin/media', requireRole('AUTHOR'), asyncHandler(async (_req, res) => ok(res, await prisma.mediaAsset.findMany({ orderBy: { uploadedAt: 'desc' } }))));
-router.post('/admin/media', requireRole('AUTHOR'), validateBody(mediaSchema), asyncHandler(async (req, res) => created(res, await prisma.mediaAsset.create({ data: { ...req.body, uploaderId: req.user!.id } }))));
+router.post('/admin/media/upload', requireRole('AUTHOR'), upload.single('file'), asyncHandler(async (req, res) => {
+  const file = req.file;
+  if (!file) badRequest('Upload a file.');
+  const id = randomUUID();
+  const stored = await storeMediaBuffer({
+    id,
+    name: file.originalname,
+    mime: file.mimetype || 'application/octet-stream',
+    buffer: file.buffer,
+  }).catch((error: unknown) => {
+    badRequest(error instanceof Error ? error.message : 'Unable to store uploaded media.');
+  });
+  const media = await prisma.mediaAsset.create({
+    data: {
+      id,
+      name: file.originalname,
+      alt: String(req.body.alt || file.originalname.replace(/\.[^.]+$/, '')).slice(0, 200),
+      url: stored.url,
+      mime: file.mimetype || 'application/octet-stream',
+      sizeBytes: stored.sizeBytes || file.size,
+      width: Number(req.body.width || 0) || 0,
+      height: Number(req.body.height || 0) || 0,
+      storageProvider: stored.provider,
+      storageKey: stored.key,
+      uploaderId: req.user!.id,
+    },
+  });
+  await writeAudit({ actorId: req.user!.id, actorEmail: req.user!.email, action: 'UPLOAD', resource: 'Media', resourceId: media.id, detail: media.name, ip: req.ip });
+  created(res, media);
+}));
+router.post('/admin/media', requireRole('AUTHOR'), validateBody(mediaSchema), asyncHandler(async (req, res) => {
+  const id = req.body.id || randomUUID();
+  const stored = req.body.url.startsWith('data:image/')
+    ? await storeDataUrlMedia({
+        id,
+        name: req.body.name,
+        fallbackMime: req.body.mime,
+        dataUrl: req.body.url,
+      }).catch((error: unknown) => {
+        badRequest(error instanceof Error ? error.message : 'Unable to store media.');
+      })
+    : { provider: 'external', key: '', url: req.body.url, sizeBytes: req.body.sizeBytes };
+  const media = await prisma.mediaAsset.create({
+    data: {
+      ...req.body,
+      id,
+      url: stored.url,
+      sizeBytes: stored.sizeBytes || req.body.sizeBytes,
+      storageProvider: stored.provider,
+      storageKey: stored.key,
+      uploaderId: req.user!.id,
+    },
+  });
+  created(res, media);
+}));
 router.patch('/admin/media/:id', requireRole('AUTHOR'), validateBody(mediaSchema.partial()), asyncHandler(async (req, res) => {
   const media = await prisma.mediaAsset.update({ where: idParamSchema.parse(req.params), data: req.body }).catch(() => null);
   if (!media) notFound('Media asset not found.');
   ok(res, media);
 }));
 router.delete('/admin/media/:id', requireRole('EDITOR'), asyncHandler(async (req, res) => {
-  await prisma.mediaAsset.delete({ where: idParamSchema.parse(req.params) });
+  const media = await prisma.mediaAsset.findUnique({ where: idParamSchema.parse(req.params) });
+  if (!media) notFound('Media asset not found.');
+  await prisma.mediaAsset.delete({ where: { id: media.id } });
+  await deleteStoredMedia(media.storageProvider, media.storageKey);
   ok(res, { deleted: true });
 }));
 

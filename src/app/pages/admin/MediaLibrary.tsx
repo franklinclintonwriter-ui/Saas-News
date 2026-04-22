@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Upload, Search, Grid3x3, List, Trash2, Download, ExternalLink, Copy } from 'lucide-react';
+import { useAuth } from '../../context/auth-context';
 import { useCms } from '../../context/cms-context';
-import { makeId, type AdminMedia } from '../../lib/admin/cms-state';
+import type { AdminMedia } from '../../lib/admin/cms-state';
+import { uploadAdminMediaFile } from '../../lib/api-cms';
 import { toast } from '../../lib/notify';
 import {
   AlertDialog,
@@ -21,14 +23,33 @@ function formatBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(2)} MB`;
 }
 
+function imageDimensions(file: File): Promise<{ width: number; height: number }> {
+  if (!file.type.startsWith('image/')) return Promise.resolve({ width: 0, height: 0 });
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve({ width: img.naturalWidth || 0, height: img.naturalHeight || 0 });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve({ width: 0, height: 0 });
+    };
+    img.src = url;
+  });
+}
+
 export default function MediaLibrary() {
   const { state, dispatch } = useCms();
+  const { accessToken } = useAuth();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'image' | 'other'>('all');
   const [sort, setSort] = useState<'date' | 'name' | 'size'>('date');
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const filtered = useMemo(() => {
@@ -54,28 +75,27 @@ export default function MediaLibrary() {
 
   const totalBytes = state.media.reduce((a, m) => a + m.sizeBytes, 0);
 
-  const onFiles = (files: FileList | null) => {
+  const onFiles = async (files: FileList | null) => {
     if (!files?.length) return;
-    Array.from(files).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const url = typeof reader.result === 'string' ? reader.result : '';
-        const item: AdminMedia = {
-          id: makeId(),
-          name: file.name,
-          alt: file.name.replace(/\.[^.]+$/, ''),
-          url,
-          mime: file.type || 'application/octet-stream',
-          sizeBytes: file.size,
-          width: 1200,
-          height: 800,
-          uploadedAt: new Date().toISOString(),
-        };
-        dispatch({ type: 'MEDIA_ADD', item });
-      };
-      reader.readAsDataURL(file);
-    });
-    toast.success(`${files.length} file(s) uploaded to workspace.`);
+    if (!accessToken) {
+      toast.error('Sign in again before uploading media.');
+      return;
+    }
+    setUploading(true);
+    try {
+      const uploaded: AdminMedia[] = [];
+      for (const file of Array.from(files)) {
+        const dimensions = await imageDimensions(file);
+        uploaded.push(await uploadAdminMediaFile(file, accessToken, dimensions));
+      }
+      const uploadedIds = new Set(uploaded.map((item) => item.id));
+      dispatch({ type: 'HYDRATE', payload: { ...state, media: [...uploaded, ...state.media.filter((item) => !uploadedIds.has(item.id))] } });
+      toast.success(`${uploaded.length} file(s) uploaded to Cloudflare-ready media storage.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Upload failed.');
+    } finally {
+      setUploading(false);
+    }
   };
 
   const copyUrl = (url: string) => {
@@ -98,9 +118,9 @@ export default function MediaLibrary() {
           <h1 className="text-2xl md:text-3xl font-bold mb-2">Media Library</h1>
           <p className="text-sm md:text-base text-[#6B7280]">Upload and manage your images and files</p>
         </div>
-        <Button className="bg-[#194890] hover:bg-[#2656A8] font-semibold" onClick={() => inputRef.current?.click()}>
+        <Button className="bg-[#194890] hover:bg-[#2656A8] font-semibold" disabled={uploading} onClick={() => inputRef.current?.click()}>
           <Upload size={20} className="mr-2" />
-          Upload Files
+          {uploading ? 'Uploading...' : 'Upload Files'}
         </Button>
         <input
           ref={inputRef}
@@ -109,7 +129,7 @@ export default function MediaLibrary() {
           className="hidden"
           accept="image/*,.pdf,.doc,.docx"
           onChange={(e) => {
-            onFiles(e.target.files);
+            void onFiles(e.target.files);
             e.target.value = '';
           }}
         />
@@ -178,7 +198,7 @@ export default function MediaLibrary() {
             <Upload className="mx-auto mb-4 text-[#6B7280]" size={48} />
             <h3 className="font-bold mb-2">Drop files to upload</h3>
             <p className="text-sm text-[#6B7280] mb-1">or click to browse from your computer</p>
-            <p className="text-xs text-[#9CA3AF]">Uploaded to the API media library for this workspace</p>
+            <p className="text-xs text-[#9CA3AF]">Uploaded to the API media library and Cloudflare R2 when configured</p>
           </button>
 
           {viewMode === 'grid' ? (
@@ -331,7 +351,7 @@ export default function MediaLibrary() {
                 </div>
               </div>
               <div className="flex gap-3 pt-4 flex-wrap">
-                <Button type="button" className="bg-[#194890] hover:bg-[#2656A8]" onClick={() => inputRef.current?.click()}>
+                <Button type="button" className="bg-[#194890] hover:bg-[#2656A8]" disabled={uploading} onClick={() => inputRef.current?.click()}>
                   Replace (upload new)
                 </Button>
                 <Button type="button" variant="destructive" onClick={() => setDeleteId(selected.id)}>
