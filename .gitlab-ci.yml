@@ -1,0 +1,49 @@
+stages:
+  - verify
+  - deploy
+
+variables:
+  NODE_VERSION: "22"
+  VITE_API_BASE_URL: "/api"
+
+default:
+  image: node:${NODE_VERSION}-bookworm-slim
+  cache:
+    key:
+      files:
+        - package-lock.json
+    paths:
+      - .npm/
+  before_script:
+    - npm ci --cache .npm --prefer-offline
+
+verify:
+  stage: verify
+  script:
+    - npm run api:typecheck
+    - npm run build:public
+    - npm run build:admin
+
+deploy_public_pages:
+  stage: deploy
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" && $CLOUDFLARE_API_TOKEN && $CLOUDFLARE_ACCOUNT_ID'
+      when: manual
+  variables:
+    VITE_APP_SURFACE: "public"
+    BACKEND_ORIGIN: "$BACKEND_ORIGIN"
+  script:
+    - npm run build:public
+    - npx wrangler@latest pages deploy dist --project-name phulpur-magazine --branch main
+
+deploy_admin_pages:
+  stage: deploy
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" && $CLOUDFLARE_API_TOKEN && $CLOUDFLARE_ACCOUNT_ID'
+      when: manual
+  variables:
+    VITE_APP_SURFACE: "admin"
+    BACKEND_ORIGIN: "$BACKEND_ORIGIN"
+  script:
+    - npm run build:admin
+    - npx wrangler@latest pages deploy dist --project-name phulpur-admin --branch main
