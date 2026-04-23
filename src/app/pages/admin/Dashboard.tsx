@@ -2,11 +2,15 @@ import { useMemo } from 'react';
 import { Link } from 'react-router';
 import { FileText, Eye, Edit, TrendingUp } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { useAuth } from '../../context/auth-context';
 import { useCms } from '../../context/cms-context';
+import { hasMinimumRole } from '../../lib/admin/role-access';
 import { categoryPostCount, formatRelative } from '../../lib/admin/cms-state';
 
 export default function Dashboard() {
+  const { user } = useAuth();
   const { state } = useCms();
+  const canEditAnyPost = hasMinimumRole(user?.role, 'EDITOR');
 
   const stats = useMemo(() => {
     const total = state.posts.length;
@@ -56,6 +60,7 @@ export default function Dashboard() {
           id: p.id,
           title: p.title,
           author: p.author,
+          authorProfile: p.authorProfile,
           status: p.status,
           date: formatRelative(p.updatedAt),
           views: p.views,
@@ -63,13 +68,16 @@ export default function Dashboard() {
     [state.posts],
   );
 
+  const canEditPost = (post: (typeof recentPosts)[number]) => {
+    if (canEditAnyPost) return true;
+    if (post.authorProfile?.id && user?.id && post.authorProfile.id === user.id) return true;
+    if (post.authorProfile?.email && user?.email && post.authorProfile.email.toLowerCase() === user.email.toLowerCase()) return true;
+    if (post.author && user?.name && post.author.trim().toLowerCase() === user.name.trim().toLowerCase()) return true;
+    return false;
+  };
+
   return (
     <div>
-      <div className="mb-6 md:mb-8">
-        <h1 className="text-2xl md:text-3xl font-bold mb-2">Dashboard</h1>
-        <p className="text-sm md:text-base text-[#6B7280]">Operational snapshot of your Phulpur24 workspace.</p>
-      </div>
-
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8">
         {stats.map((stat) => {
           const Icon = stat.icon;
@@ -90,8 +98,7 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
         <div className="lg:col-span-2 bg-white rounded-lg p-4 md:p-6 border border-[#E5E7EB]">
-          <h2 className="text-lg md:text-xl font-bold mb-2">Traffic Overview</h2>
-          <p className="text-xs text-[#6B7280] mb-3">Loaded from Prisma analytics snapshots when available.</p>
+          <h2 className="text-lg md:text-xl font-bold mb-4">Traffic Overview</h2>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={dashboardTrafficData}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -137,9 +144,13 @@ export default function Dashboard() {
                 {recentPosts.map((post) => (
                   <tr key={post.id} className="hover:bg-[#F9FAFB]">
                     <td className="px-6 py-4">
-                      <Link to={`/admin/posts/edit/${post.id}`} className="font-semibold text-sm text-[#194890] hover:underline">
-                        {post.title}
-                      </Link>
+                      {canEditPost(post) ? (
+                        <Link to={`/admin/posts/edit/${post.id}`} className="font-semibold text-sm text-[#194890] hover:underline">
+                          {post.title}
+                        </Link>
+                      ) : (
+                        <span className="font-semibold text-sm text-[#111827]">{post.title}</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-sm text-[#6B7280]">{post.author}</td>
                     <td className="px-6 py-4">

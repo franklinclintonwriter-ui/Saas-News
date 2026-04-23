@@ -133,7 +133,12 @@ export default function HomePage() {
   if (!featuredItem) {
     return (
       <div className="bg-[#F3F4F6] min-h-[40vh] flex items-center justify-center px-4">
-        <p className="text-center text-[#6B7280]">No published stories yet. Publish a post in the admin console to populate the homepage.</p>
+        <div className="max-w-xl rounded-lg border border-[#E5E7EB] bg-white px-6 py-8 text-center text-[#6B7280] shadow-sm">
+          <p className="text-base font-semibold text-[#111827]">No published stories yet</p>
+          <p className="mt-2 text-sm leading-relaxed">
+            There are no stories published yet. New stories from the newsroom will appear here as soon as they are made public.
+          </p>
+        </div>
       </div>
     );
   }
@@ -182,18 +187,28 @@ export default function HomePage() {
             <h2 className="text-xl md:text-2xl font-bold">Trending Now</h2>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-            {trending.map((news) => (
-              <Link key={news.id} to={`/article/${news.id}`} className="bg-white rounded-lg p-4 border border-[#E5E7EB] block hover:shadow-md transition">
-                <div className="w-full h-32 bg-[#E5E7EB] rounded mb-3 overflow-hidden">
-                  {(() => {
-                    const url = imageByPostId.get(news.id);
-                    return url ? <img src={url} alt="" className="w-full h-full object-cover" /> : null;
-                  })()}
-                </div>
-                <span className="text-xs text-[#194890] font-semibold">{news.category}</span>
-                <h3 className="font-semibold text-sm mt-2 line-clamp-2">{news.title}</h3>
-              </Link>
-            ))}
+            {trending.length === 0 ? (
+              <p className="rounded-lg border border-[#E5E7EB] bg-white px-4 py-6 text-sm text-[#6B7280] sm:col-span-2 lg:col-span-4">
+                Not enough traffic data yet for trending stories.
+              </p>
+            ) : (
+              trending.map((news) => (
+                <Link
+                  key={news.id}
+                  to={`/article/${news.id}`}
+                  className="bg-white rounded-lg p-4 border border-[#E5E7EB] block hover:shadow-md transition"
+                >
+                  <div className="w-full h-32 bg-[#E5E7EB] rounded mb-3 overflow-hidden">
+                    {(() => {
+                      const url = imageByPostId.get(news.id);
+                      return url ? <img src={url} alt="" className="w-full h-full object-cover" /> : null;
+                    })()}
+                  </div>
+                  <span className="text-xs text-[#194890] font-semibold">{news.category}</span>
+                  <h3 className="font-semibold text-sm mt-2 line-clamp-2">{news.title}</h3>
+                </Link>
+              ))
+            )}
           </div>
         </div>
       </section>
@@ -365,7 +380,7 @@ export default function HomePage() {
                 Stay informed
               </h2>
               <p className="mx-auto mt-3 max-w-xl text-base leading-relaxed text-white/90 sm:text-lg lg:mx-0">
-                Receive our editorial briefing each weekday—curated headlines, context, and analysis. No spam; one click
+                Receive our editorial briefing each weekday - curated headlines, context, and analysis. No spam; one click
                 to unsubscribe.
               </p>
             </div>

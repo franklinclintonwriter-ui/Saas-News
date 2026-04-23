@@ -1,4 +1,3 @@
-import { ARTICLE_CATALOG } from '../content/article-catalog';
 
 export const CMS_STORAGE_KEY = 'phulpur24_cms_state_v2';
 export const CMS_VERSION = 2;
@@ -295,62 +294,6 @@ export function computeSeoScore(p: Pick<AdminPost, 'title' | 'seoTitle' | 'metaD
   }
   return Math.min(100, Math.round(s));
 }
-
-const STATUSES: PostStatus[] = ['Published', 'Published', 'Draft', 'Published', 'Published', 'Scheduled'];
-
-const DEFAULT_SETTINGS: SiteSettings = {
-  siteTitle: 'Phulpur24',
-  tagline: 'Verified local news, analysis, and updates from Phulpur',
-  logoUrl: '',
-  logoAlt: 'Phulpur24',
-  logoHeight: 40,
-  showHeaderLogo: true,
-  showSiteTitle: true,
-  showFooterLogo: true,
-  showFooterSiteTitle: true,
-  faviconUrl: '',
-  ogImageUrl: '',
-  siteUrl: 'http://localhost:5174',
-  organizationName: 'Phulpur24',
-  defaultSeoTitle: 'Phulpur24 - Local News, Analysis and Updates',
-  defaultMetaDescription:
-    'Read Phulpur24 for verified local news, public-interest reporting, analysis, and timely updates from Phulpur, Mymensingh, Bangladesh and beyond.',
-  defaultKeywords: 'Phulpur24, Phulpur news, Mymensingh news, Bangladesh news, local news, breaking news',
-  twitterHandle: '',
-  googleSiteVerification: 'Scecq8dllrg_egJpIykwEbTZbz2ymYg9JO_eC6NwFOA',
-  bingSiteVerification: '',
-  robotsIndex: true,
-  robotsFollow: true,
-  structuredDataEnabled: true,
-  schemaType: 'NewsMediaOrganization',
-  primaryColor: '#194890',
-  accentColor: '#DC2626',
-  headerBackground: '#FFFFFF',
-  footerBackground: '#0B1220',
-  facebook: '',
-  twitter: '',
-  instagram: '',
-  linkedin: '',
-  copyright: '(c) 2026 Phulpur24. All rights reserved.',
-  footerAbout:
-    'Phulpur24 publishes verified local news, analysis, and public-interest reporting for readers in Phulpur and surrounding communities.',
-  gaId: '',
-  fbPixel: '',
-  customTracking: '',
-  contactEmail: 'contact@phulpur24.com',
-  supportEmail: 'support@phulpur24.com',
-  pressEmail: 'press@phulpur24.com',
-  advertisingEmail: 'ads@phulpur24.com',
-  tipsEmail: 'tips@phulpur24.com',
-  phone: '',
-  address: '',
-  businessHours: 'Sunday-Thursday 9am-6pm',
-  officeLocations: 'Phulpur|Phulpur, Mymensingh, Bangladesh|',
-  newsletterFromName: 'Phulpur24 Team',
-  newsletterFromEmail: 'newsletter@phulpur24.com',
-  newsletterEnabled: true,
-  dailyDigest: false,
-};
 
 const EMPTY_SETTINGS: SiteSettings = {
   siteTitle: '',
@@ -668,26 +611,7 @@ function profileForUser(user: AdminUser): AuthorProfile {
 }
 
 export function createInitialCmsState(): CmsState {
-  const categories = seedCategories();
-  const tags = seedTags();
-  const posts = seedPosts();
-  return {
-    version: CMS_VERSION,
-    posts,
-    categories,
-    tags,
-    media: seedMedia(),
-    comments: seedComments(posts),
-    users: seedUsers(),
-    settings: { ...DEFAULT_SETTINGS },
-    auditLog: [],
-    pages: [],
-    contactMessages: [],
-    newsletterSubscribers: [],
-    ads: [],
-    navigation: [],
-    analyticsSnapshots: [],
-  };
+  return createEmptyCmsState();
 }
 
 export function createEmptyCmsState(): CmsState {
@@ -775,8 +699,8 @@ export function cmsReducer(state: CmsState, action: CmsAction): CmsState {
           : [action.post, ...state.posts],
       };
     case 'RESET_DEMO': {
-      const next = createInitialCmsState();
-      return withAudit(next, action.actor ?? actor, 'Workspace reset', 'System', 'Demo dataset restored');
+      const next = createEmptyCmsState();
+      return withAudit(next, action.actor ?? actor, 'Workspace reset', 'System', 'Local state cleared');
     }
     case 'POST_UPSERT': {
       const exists = state.posts.some((p) => p.id === action.post.id);
@@ -1079,12 +1003,12 @@ export function cmsReducer(state: CmsState, action: CmsAction): CmsState {
 export function loadCmsState(): CmsState {
   try {
     const raw = localStorage.getItem(CMS_STORAGE_KEY);
-    if (!raw) return createInitialCmsState();
+    if (!raw) return createEmptyCmsState();
     const parsed = JSON.parse(raw) as CmsState;
-    if (!parsed || parsed.version !== CMS_VERSION || !Array.isArray(parsed.posts)) return createInitialCmsState();
+    if (!parsed || parsed.version !== CMS_VERSION || !Array.isArray(parsed.posts)) return createEmptyCmsState();
     return parsed;
   } catch {
-    return createInitialCmsState();
+    return createEmptyCmsState();
   }
 }
 

@@ -38,7 +38,7 @@ export function ThemeModeButton({ compact = false, className }: ThemeModeButtonP
         <button
           type="button"
           className={cn(
-            'inline-flex h-10 items-center justify-center border border-[#E5E7EB] bg-white text-[#111827] shadow-sm transition hover:bg-[#F3F4F6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#194890]/30',
+            'inline-flex h-10 items-center justify-center border border-[#E5E7EB] bg-white text-[#111827] shadow-sm transition hover:bg-[#F3F4F6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#194890]/30 dark:border-border dark:bg-card dark:text-foreground dark:hover:bg-accent',
             compact ? 'w-10 rounded-full p-0' : 'gap-2 rounded-lg px-3 text-sm',
             className,
           )}

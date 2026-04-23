@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { Edit, Eye, FileText, Plus, Search, Trash2 } from 'lucide-react';
 import { useCms } from '../../context/cms-context';
+import { useAuth } from '../../context/auth-context';
 import { makeId, slugify, type StaticPage } from '../../lib/admin/cms-state';
+import { hasMinimumRole } from '../../lib/admin/role-access';
 import { toast } from '../../lib/notify';
 import { Button } from '../../components/ui/button';
 import {
@@ -47,12 +49,14 @@ function seoScore(page: PageForm): number {
 
 export default function PagesManager() {
   const { state, dispatch } = useCms();
+  const { user } = useAuth();
   const [q, setQ] = useState('');
   const [status, setStatus] = useState<'all' | StaticPage['status']>('all');
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<StaticPage | null>(null);
   const [form, setForm] = useState<PageForm>(emptyForm);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const canManagePages = hasMinimumRole(user?.role, 'EDITOR');
 
   const filtered = useMemo(() => {
     const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -87,6 +91,10 @@ export default function PagesManager() {
   };
 
   const submit = () => {
+    if (!canManagePages) {
+      toast.error('Editor access is required to modify pages.');
+      return;
+    }
     const title = form.title.trim();
     if (!title || !form.content.trim()) {
       toast.error('Title and content are required.');
@@ -119,6 +127,11 @@ export default function PagesManager() {
   };
 
   const confirmDelete = () => {
+    if (!canManagePages) {
+      toast.error('Editor access is required to delete pages.');
+      setDeleteId(null);
+      return;
+    }
     if (!deleteId) return;
     dispatch({ type: 'PAGE_DELETE', id: deleteId });
     toast.success('Page deleted.');
@@ -127,12 +140,9 @@ export default function PagesManager() {
 
   return (
     <div>
-      <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center md:mb-8">
-        <div>
-          <h1 className="mb-2 text-2xl font-bold md:text-3xl">Pages</h1>
-          <p className="text-sm text-[#6B7280] md:text-base">Manage static pages, policy content, and SEO metadata.</p>
-        </div>
-        <Button onClick={openCreate} className="bg-[#194890] font-semibold hover:bg-[#2656A8]">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 md:mb-8">
+        {!canManagePages ? <p className="text-xs font-semibold text-[#92400E]">Read-only for your role</p> : null}
+        <Button onClick={openCreate} disabled={!canManagePages} className="bg-[#194890] font-semibold hover:bg-[#2656A8] disabled:opacity-50 ml-auto">
           <Plus size={20} className="mr-2" />
           New Page
         </Button>
@@ -187,10 +197,12 @@ export default function PagesManager() {
                 </div>
               </div>
               <div className="mt-5 flex flex-wrap gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => openEdit(page)}>
-                  <Edit size={16} className="mr-2" />
-                  Edit
-                </Button>
+                {canManagePages ? (
+                  <Button type="button" variant="outline" size="sm" onClick={() => openEdit(page)}>
+                    <Edit size={16} className="mr-2" />
+                    Edit
+                  </Button>
+                ) : null}
                 <Link
                   to={pageHref(page.slug)}
                   target="_blank"
@@ -200,10 +212,12 @@ export default function PagesManager() {
                   <Eye size={16} className="mr-2" />
                   View
                 </Link>
-                <Button type="button" variant="outline" size="sm" className="border-[#FECACA] text-[#B91C1C] hover:bg-[#FEF2F2]" onClick={() => setDeleteId(page.id)}>
-                  <Trash2 size={16} className="mr-2" />
-                  Delete
-                </Button>
+                {canManagePages ? (
+                  <Button type="button" variant="outline" size="sm" className="border-[#FECACA] text-[#B91C1C] hover:bg-[#FEF2F2]" onClick={() => setDeleteId(page.id)}>
+                    <Trash2 size={16} className="mr-2" />
+                    Delete
+                  </Button>
+                ) : null}
               </div>
             </article>
           ))}
@@ -252,7 +266,7 @@ export default function PagesManager() {
             <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
               Cancel
             </Button>
-            <Button type="button" className="bg-[#194890] hover:bg-[#2656A8]" onClick={submit}>
+            <Button type="button" className="bg-[#194890] hover:bg-[#2656A8]" onClick={submit} disabled={!canManagePages}>
               Save Page
             </Button>
           </DialogFooter>

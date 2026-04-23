@@ -118,11 +118,19 @@ function classifyLoadError(error: unknown): { kind: 'auth' | 'forbidden' | 'netw
 }
 
 const ACTION_MIN_ROLE: Partial<Record<CmsAction['type'], AdminRole>> = {
+  POST_UPSERT: 'AUTHOR',
+  POST_DELETE: 'EDITOR',
+  POSTS_BULK_DELETE: 'EDITOR',
+  POSTS_BULK_SET_STATUS: 'EDITOR',
   CATEGORY_ADD: 'EDITOR',
   CATEGORY_UPDATE: 'EDITOR',
   CATEGORY_DELETE: 'EDITOR',
+  TAG_ADD: 'AUTHOR',
+  TAG_UPDATE: 'AUTHOR',
   TAG_DELETE: 'EDITOR',
   TAGS_MERGE: 'EDITOR',
+  MEDIA_ADD: 'AUTHOR',
+  MEDIA_UPDATE: 'AUTHOR',
   MEDIA_DELETE: 'EDITOR',
   COMMENT_SET_STATUS: 'EDITOR',
   COMMENT_DELETE: 'EDITOR',

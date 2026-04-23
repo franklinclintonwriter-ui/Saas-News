@@ -606,23 +606,17 @@ export default function Settings() {
 
   return (
     <div>
-      <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center md:mb-8">
-        <div>
-          <h1 className="mb-2 text-2xl font-bold md:text-3xl">Settings</h1>
-          <p className="text-sm text-[#6B7280] md:text-base">Branding, SEO, metadata, and publication controls</p>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <Button asChild variant="outline">
-            <Link to="/admin/api-config">
-              <KeyRound size={18} className="mr-2" />
-              API Config
-            </Link>
-          </Button>
-          <Button onClick={() => void save()} disabled={saving} className="bg-[#194890] font-semibold hover:bg-[#2656A8]">
-            <Save size={20} className="mr-2" />
-            {saving ? 'Saving...' : 'Save Changes'}
-          </Button>
-        </div>
+      <div className="mb-6 flex flex-wrap items-center justify-end gap-3 md:mb-8">
+        <Button asChild variant="outline">
+          <Link to="/admin/api-config">
+            <KeyRound size={18} className="mr-2" />
+            API Config
+          </Link>
+        </Button>
+        <Button onClick={() => void save()} disabled={saving} className="bg-[#194890] font-semibold hover:bg-[#2656A8]">
+          <Save size={20} className="mr-2" />
+          {saving ? 'Saving...' : 'Save Changes'}
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -634,7 +628,6 @@ export default function Settings() {
               </div>
               <div>
                 <h2 className="text-xl font-bold">Site Identity</h2>
-                <p className="text-sm text-[#6B7280]">Logo, title, tagline, and public organization identity</p>
               </div>
             </div>
             <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
@@ -696,7 +689,6 @@ export default function Settings() {
               </div>
               <div>
                 <h2 className="text-xl font-bold">SEO Defaults</h2>
-                <p className="text-sm text-[#6B7280]">Search result defaults and social sharing metadata</p>
               </div>
             </div>
             <div className="space-y-5">
@@ -725,7 +717,6 @@ export default function Settings() {
               </div>
               <div>
                 <h2 className="text-xl font-bold">Indexing & Structured Data</h2>
-                <p className="text-sm text-[#6B7280]">Canonical URL, robots, schema, and search verification</p>
               </div>
             </div>
             <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
@@ -801,7 +792,6 @@ export default function Settings() {
               </div>
               <div>
                 <h2 className="text-xl font-bold">Visual Customization</h2>
-                <p className="text-sm text-[#6B7280]">Brand colors used by header, footer, live labels, and metadata</p>
               </div>
             </div>
             <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">

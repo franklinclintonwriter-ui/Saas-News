@@ -274,11 +274,7 @@ export default function ApiConfig() {
 
   return (
     <div>
-      <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center md:mb-8">
-        <div>
-          <h1 className="mb-2 text-2xl font-bold md:text-3xl">API Config</h1>
-          <p className="text-sm text-[#6B7280] md:text-base">Encrypted provider keys for AI, email, media, analytics, payments, and webhooks</p>
-        </div>
+      <div className="mb-6 flex justify-end md:mb-8">
         <Button type="button" onClick={loadConfigs} variant="outline" disabled={loading}>
           <RefreshCw size={18} className={`mr-2 ${loading ? 'animate-spin' : ''}`} />
           Refresh

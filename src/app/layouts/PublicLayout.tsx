@@ -16,6 +16,7 @@ function formatToday(): string {
 export default function PublicLayout() {
   const { state, status } = useCms();
   const { settings, posts } = state;
+  const isBootLoading = status === 'loading' && posts.length === 0;
 
   if (status === 'offline' && posts.length === 0) {
     return (
@@ -33,6 +34,14 @@ export default function PublicLayout() {
   return (
     <div className="min-h-screen bg-background">
       <SeoManager />
+      {isBootLoading ? (
+        <div className="bg-[#DBEAFE] px-4 py-2 text-xs font-semibold text-[#1E40AF]">
+          <div className="mx-auto flex max-w-[1440px] items-center justify-center gap-2">
+            <span className="h-4 w-4 rounded-full border-2 border-[#93C5FD] border-t-[#1D4ED8] animate-spin" aria-hidden />
+            <span>Loading latest newsroom content and preparing your page...</span>
+          </div>
+        </div>
+      ) : null}
       <div className="px-4 py-2 text-white" style={{ backgroundColor: settings.primaryColor }}>
         <div className="max-w-[1440px] mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3 md:gap-6">

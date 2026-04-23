@@ -213,11 +213,7 @@ export default function Users() {
 
   return (
     <div>
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 md:mb-8">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold mb-2">Users</h1>
-          <p className="text-sm md:text-base text-[#6B7280]">Manage staff accounts, journalist profiles, author bios, and public bylines.</p>
-        </div>
+      <div className="mb-6 flex flex-wrap items-center justify-end gap-4 md:mb-8">
         <Button onClick={openAdd} className="bg-[#194890] hover:bg-[#2656A8] font-semibold">
           <Plus size={20} className="mr-2" />
           Add User

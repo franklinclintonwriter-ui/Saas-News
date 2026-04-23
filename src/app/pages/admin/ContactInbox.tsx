@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { CheckCircle2, Mail, Search, ShieldAlert, Trash2 } from 'lucide-react';
+import { useAuth } from '../../context/auth-context';
 import { useCms } from '../../context/cms-context';
+import { hasMinimumRole } from '../../lib/admin/role-access';
 import { formatRelative, type ContactMessage } from '../../lib/admin/cms-state';
 import { toast } from '../../lib/notify';
 import { Button } from '../../components/ui/button';
@@ -30,10 +32,12 @@ const statusClass: Record<ContactMessage['status'], string> = {
 };
 
 export default function ContactInbox() {
+  const { user } = useAuth();
   const { state, dispatch } = useCms();
   const [q, setQ] = useState('');
   const [status, setStatus] = useState<'all' | ContactMessage['status']>('all');
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const canManageInbox = hasMinimumRole(user?.role, 'EDITOR');
 
   const filtered = useMemo(() => {
     const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -58,11 +62,20 @@ export default function ContactInbox() {
   );
 
   const setMessageStatus = (id: string, nextStatus: ContactMessage['status']) => {
+    if (!canManageInbox) {
+      toast.error('Editor access is required to update message status.');
+      return;
+    }
     dispatch({ type: 'CONTACT_MESSAGE_SET_STATUS', id, status: nextStatus });
     toast.success(`Message marked ${statusLabels[nextStatus].toLowerCase()}.`);
   };
 
   const confirmDelete = () => {
+    if (!canManageInbox) {
+      toast.error('Editor access is required to delete messages.');
+      setDeleteId(null);
+      return;
+    }
     if (!deleteId) return;
     dispatch({ type: 'CONTACT_MESSAGE_DELETE', id: deleteId });
     toast.success('Contact message deleted.');
@@ -71,10 +84,7 @@ export default function ContactInbox() {
 
   return (
     <div>
-      <div className="mb-6 md:mb-8">
-        <h1 className="mb-2 text-2xl font-bold md:text-3xl">Contact Inbox</h1>
-        <p className="text-sm text-[#6B7280] md:text-base">Review visitor messages, support requests, advertising inquiries, and newsroom tips.</p>
-      </div>
+      {!canManageInbox ? <p className="mb-4 text-xs font-semibold text-[#92400E]">Read-only for your role</p> : null}
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-4">
         {[
@@ -127,31 +137,33 @@ export default function ContactInbox() {
                     </div>
                     <h2 className="text-lg font-bold">{message.subject}</h2>
                     <p className="mt-1 text-sm text-[#6B7280]">
-                      {message.firstName} {message.lastName} ·{' '}
+                      {message.firstName} {message.lastName} -{' '}
                       <a href={`mailto:${message.email}`} className="font-semibold text-[#194890] hover:underline">
                         {message.email}
                       </a>
                     </p>
                     <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-[#374151]">{message.message}</p>
                   </div>
-                  <div className="flex flex-wrap gap-2 lg:w-56 lg:justify-end">
-                    <Button type="button" variant="outline" size="sm" onClick={() => setMessageStatus(message.id, 'IN_REVIEW')}>
-                      <Mail size={16} className="mr-2" />
-                      Review
-                    </Button>
-                    <Button type="button" variant="outline" size="sm" onClick={() => setMessageStatus(message.id, 'RESOLVED')}>
-                      <CheckCircle2 size={16} className="mr-2" />
-                      Resolve
-                    </Button>
-                    <Button type="button" variant="outline" size="sm" onClick={() => setMessageStatus(message.id, 'SPAM')}>
-                      <ShieldAlert size={16} className="mr-2" />
-                      Spam
-                    </Button>
-                    <Button type="button" variant="outline" size="sm" className="border-[#FECACA] text-[#B91C1C] hover:bg-[#FEF2F2]" onClick={() => setDeleteId(message.id)}>
-                      <Trash2 size={16} className="mr-2" />
-                      Delete
-                    </Button>
-                  </div>
+                  {canManageInbox ? (
+                    <div className="flex flex-wrap gap-2 lg:w-56 lg:justify-end">
+                      <Button type="button" variant="outline" size="sm" onClick={() => setMessageStatus(message.id, 'IN_REVIEW')}>
+                        <Mail size={16} className="mr-2" />
+                        Review
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={() => setMessageStatus(message.id, 'RESOLVED')}>
+                        <CheckCircle2 size={16} className="mr-2" />
+                        Resolve
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={() => setMessageStatus(message.id, 'SPAM')}>
+                        <ShieldAlert size={16} className="mr-2" />
+                        Spam
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" className="border-[#FECACA] text-[#B91C1C] hover:bg-[#FEF2F2]" onClick={() => setDeleteId(message.id)}>
+                        <Trash2 size={16} className="mr-2" />
+                        Delete
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
               </article>
             ))

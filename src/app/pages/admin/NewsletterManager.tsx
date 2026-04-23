@@ -63,11 +63,7 @@ export default function NewsletterManager() {
 
   return (
     <div>
-      <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center md:mb-8">
-        <div>
-          <h1 className="mb-2 text-2xl font-bold md:text-3xl">Newsletter</h1>
-          <p className="text-sm text-[#6B7280] md:text-base">Manage subscribers collected from header, homepage, and sidebar signups.</p>
-        </div>
+      <div className="mb-6 flex justify-end md:mb-8">
         <Button type="button" variant="outline" onClick={() => downloadCsv(filtered)}>
           <Download size={18} className="mr-2" />
           Export CSV

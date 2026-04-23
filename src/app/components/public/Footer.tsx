@@ -108,7 +108,7 @@ export default function Footer() {
                   </li>
                 ) : (
                   <li key={item.label}>
-                    <a href={item.href} className={linkClass}>
+                    <a href={item.href} target="_blank" rel="noopener noreferrer" className={linkClass}>
                       {item.label}
                     </a>
                   </li>

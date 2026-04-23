@@ -1,6 +1,6 @@
 import type { FormEvent } from 'react';
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { Mail, Search, Menu, X } from 'lucide-react';
 import { ThemeModeButton } from '../ThemeModeButton';
 import { useCms } from '../../context/cms-context';
@@ -46,6 +46,7 @@ export default function Header() {
   const [email, setEmail] = useState('');
   const { state } = useCms();
   const { resolvedTheme } = useTheme();
+  const { pathname } = useLocation();
 
   const navCategories = useMemo(() => state.categories.slice(0, MAX_NAV), [state.categories]);
   const managedHeaderLinks = useMemo(
@@ -82,6 +83,8 @@ export default function Header() {
   const showTitle = settings.showSiteTitle || !showLogo;
   const subscriptionsEnabled = settings.newsletterEnabled;
   const headerBackground = getThemeAwareHeaderBackground(settings.headerBackground, resolvedTheme === 'dark');
+  const isActiveRoute = (href: string) =>
+    href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`);
 
   const closeMobile = () => setMobileMenuOpen(false);
 
@@ -125,11 +128,24 @@ export default function Header() {
         <nav className="hidden lg:flex items-center gap-6 xl:gap-8">
           {headerLinks.map((item) =>
             item.external ? (
-              <a key={item.key} href={item.href} target="_blank" rel="noreferrer" className="hover:text-[#194890] transition">
+              <a
+                key={item.key}
+                href={item.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-md px-1 py-1 transition hover:text-[#194890]"
+              >
                 {item.label}
               </a>
             ) : (
-              <Link key={item.key} to={item.href} className="hover:text-[#194890] transition">
+              <Link
+                key={item.key}
+                to={item.href}
+                aria-current={isActiveRoute(item.href) ? 'page' : undefined}
+                className={`rounded-md px-1 py-1 transition hover:text-[#194890] ${
+                  isActiveRoute(item.href) ? 'font-semibold text-[#111827]' : 'text-inherit'
+                }`}
+              >
                 {item.label}
               </Link>
             ),
@@ -210,9 +226,10 @@ export default function Header() {
                   key={item.key}
                   href={item.href}
                   target="_blank"
-                  rel="noreferrer"
+                  rel="noopener noreferrer"
+                  aria-label={item.label}
                   onClick={closeMobile}
-                  className="block px-4 py-3 hover:bg-[#F3F4F6] rounded-lg transition"
+                  className="block rounded-lg px-4 py-3 hover:bg-[#F3F4F6] transition"
                 >
                   {item.label}
                 </a>
@@ -220,8 +237,11 @@ export default function Header() {
                 <Link
                   key={item.key}
                   to={item.href}
+                  aria-current={isActiveRoute(item.href) ? 'page' : undefined}
                   onClick={closeMobile}
-                  className="block px-4 py-3 hover:bg-[#F3F4F6] rounded-lg transition"
+                  className={`block rounded-lg px-4 py-3 transition hover:bg-[#F3F4F6] ${
+                    isActiveRoute(item.href) ? 'font-semibold' : ''
+                  }`}
                 >
                   {item.label}
                 </Link>

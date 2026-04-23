@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Edit, ExternalLink, Megaphone, Plus, Search, Trash2 } from 'lucide-react';
+import { useAuth } from '../../context/auth-context';
 import { useCms } from '../../context/cms-context';
+import { hasMinimumRole } from '../../lib/admin/role-access';
 import { makeId, slugify, type AdPlacement } from '../../lib/admin/cms-state';
 import { toast } from '../../lib/notify';
 import { Button } from '../../components/ui/button';
@@ -57,6 +59,7 @@ function fromDateTimeInput(value: string): string | null {
 }
 
 export default function AdsManager() {
+  const { user } = useAuth();
   const { state, dispatch } = useCms();
   const [q, setQ] = useState('');
   const [placement, setPlacement] = useState('all');
@@ -64,6 +67,7 @@ export default function AdsManager() {
   const [editing, setEditing] = useState<AdPlacement | null>(null);
   const [form, setForm] = useState<AdForm>(emptyForm);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const canManageAds = hasMinimumRole(user?.role, 'EDITOR');
 
   const placements = useMemo(() => ['all', ...Array.from(new Set([...placementOptions, ...state.ads.map((ad) => ad.placement)]))], [state.ads]);
 
@@ -80,12 +84,20 @@ export default function AdsManager() {
   }, [state.ads, q, placement]);
 
   const openCreate = () => {
+    if (!canManageAds) {
+      toast.error('Editor access is required to create ads.');
+      return;
+    }
     setEditing(null);
     setForm(emptyForm);
     setModalOpen(true);
   };
 
   const openEdit = (ad: AdPlacement) => {
+    if (!canManageAds) {
+      toast.error('Editor access is required to edit ads.');
+      return;
+    }
     setEditing(ad);
     setForm({
       key: ad.key,
@@ -103,6 +115,11 @@ export default function AdsManager() {
   };
 
   const submit = () => {
+    if (!canManageAds) {
+      toast.error('Editor access is required to save ads.');
+      setModalOpen(false);
+      return;
+    }
     if (!form.name.trim() || !form.placement.trim()) {
       toast.error('Ad name and placement are required.');
       return;
@@ -134,6 +151,11 @@ export default function AdsManager() {
   };
 
   const confirmDelete = () => {
+    if (!canManageAds) {
+      toast.error('Editor access is required to delete ads.');
+      setDeleteId(null);
+      return;
+    }
     if (!deleteId) return;
     dispatch({ type: 'AD_DELETE', id: deleteId });
     toast.success('Ad placement deleted.');
@@ -142,12 +164,9 @@ export default function AdsManager() {
 
   return (
     <div>
-      <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center md:mb-8">
-        <div>
-          <h1 className="mb-2 text-2xl font-bold md:text-3xl">Ads</h1>
-          <p className="text-sm text-[#6B7280] md:text-base">Manage sponsored placements, campaign links, and live ad windows.</p>
-        </div>
-        <Button onClick={openCreate} className="bg-[#194890] font-semibold hover:bg-[#2656A8]">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 md:mb-8">
+        {!canManageAds ? <p className="text-xs font-semibold text-[#92400E]">Read-only for your role</p> : null}
+        <Button onClick={openCreate} disabled={!canManageAds} className="bg-[#194890] font-semibold hover:bg-[#2656A8] ml-auto">
           <Plus size={20} className="mr-2" />
           New Ad
         </Button>
@@ -221,16 +240,18 @@ export default function AdsManager() {
                     Target URL
                   </a>
                 )}
-                <div className="mt-5 flex flex-wrap gap-2">
-                  <Button type="button" variant="outline" size="sm" onClick={() => openEdit(ad)}>
-                    <Edit size={16} className="mr-2" />
-                    Edit
-                  </Button>
-                  <Button type="button" variant="outline" size="sm" className="border-[#FECACA] text-[#B91C1C] hover:bg-[#FEF2F2]" onClick={() => setDeleteId(ad.id)}>
-                    <Trash2 size={16} className="mr-2" />
-                    Delete
-                  </Button>
-                </div>
+                {canManageAds ? (
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    <Button type="button" variant="outline" size="sm" onClick={() => openEdit(ad)}>
+                      <Edit size={16} className="mr-2" />
+                      Edit
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" className="border-[#FECACA] text-[#B91C1C] hover:bg-[#FEF2F2]" onClick={() => setDeleteId(ad.id)}>
+                      <Trash2 size={16} className="mr-2" />
+                      Delete
+                    </Button>
+                  </div>
+                ) : null}
               </div>
             </article>
           ))}
@@ -293,7 +314,7 @@ export default function AdsManager() {
             <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
               Cancel
             </Button>
-            <Button type="button" className="bg-[#194890] hover:bg-[#2656A8]" onClick={submit}>
+            <Button type="button" className="bg-[#194890] hover:bg-[#2656A8]" onClick={submit} disabled={!canManageAds}>
               Save Ad
             </Button>
           </DialogFooter>

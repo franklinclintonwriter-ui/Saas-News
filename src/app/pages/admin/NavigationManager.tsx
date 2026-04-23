@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Edit, ExternalLink, Link as LinkIcon, Navigation, Plus, Search, Trash2 } from 'lucide-react';
+import { useAuth } from '../../context/auth-context';
 import { useCms } from '../../context/cms-context';
+import { hasMinimumRole } from '../../lib/admin/role-access';
 import { makeId, type NavigationItem } from '../../lib/admin/cms-state';
 import { toast } from '../../lib/notify';
 import { Button } from '../../components/ui/button';
@@ -34,6 +36,7 @@ const locationLabels: Record<NavigationItem['location'], string> = {
 };
 
 export default function NavigationManager() {
+  const { user } = useAuth();
   const { state, dispatch } = useCms();
   const [q, setQ] = useState('');
   const [location, setLocation] = useState<'all' | NavigationItem['location']>('all');
@@ -41,6 +44,7 @@ export default function NavigationManager() {
   const [editing, setEditing] = useState<NavigationItem | null>(null);
   const [form, setForm] = useState<NavigationForm>(emptyForm);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const canManageNavigation = hasMinimumRole(user?.role, 'EDITOR');
 
   const filtered = useMemo(() => {
     const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -55,12 +59,20 @@ export default function NavigationManager() {
   }, [state.navigation, q, location]);
 
   const openCreate = () => {
+    if (!canManageNavigation) {
+      toast.error('Editor access is required to create navigation links.');
+      return;
+    }
     setEditing(null);
     setForm({ ...emptyForm, position: state.navigation.length * 10 });
     setModalOpen(true);
   };
 
   const openEdit = (item: NavigationItem) => {
+    if (!canManageNavigation) {
+      toast.error('Editor access is required to edit navigation links.');
+      return;
+    }
     setEditing(item);
     setForm({
       label: item.label,
@@ -74,6 +86,11 @@ export default function NavigationManager() {
   };
 
   const submit = () => {
+    if (!canManageNavigation) {
+      toast.error('Editor access is required to save navigation links.');
+      setModalOpen(false);
+      return;
+    }
     if (!form.label.trim() || !form.href.trim()) {
       toast.error('Label and URL are required.');
       return;
@@ -95,6 +112,11 @@ export default function NavigationManager() {
   };
 
   const confirmDelete = () => {
+    if (!canManageNavigation) {
+      toast.error('Editor access is required to delete navigation links.');
+      setDeleteId(null);
+      return;
+    }
     if (!deleteId) return;
     dispatch({ type: 'NAVIGATION_DELETE', id: deleteId });
     toast.success('Navigation item deleted.');
@@ -103,12 +125,9 @@ export default function NavigationManager() {
 
   return (
     <div>
-      <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center md:mb-8">
-        <div>
-          <h1 className="mb-2 text-2xl font-bold md:text-3xl">Navigation</h1>
-          <p className="text-sm text-[#6B7280] md:text-base">Control header, footer, and utility links without changing code.</p>
-        </div>
-        <Button onClick={openCreate} className="bg-[#194890] font-semibold hover:bg-[#2656A8]">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 md:mb-8">
+        {!canManageNavigation ? <p className="text-xs font-semibold text-[#92400E]">Read-only for your role</p> : null}
+        <Button onClick={openCreate} disabled={!canManageNavigation} className="bg-[#194890] font-semibold hover:bg-[#2656A8] ml-auto">
           <Plus size={20} className="mr-2" />
           New Link
         </Button>
@@ -186,12 +205,16 @@ export default function NavigationManager() {
                       <a href={item.href} target={item.external ? '_blank' : undefined} rel={item.external ? 'noreferrer' : undefined} className="rounded p-2 hover:bg-[#F3F4F6]" title="Open">
                         <ExternalLink size={16} />
                       </a>
-                      <button type="button" onClick={() => openEdit(item)} className="rounded p-2 hover:bg-[#F3F4F6]" title="Edit">
-                        <Edit size={16} />
-                      </button>
-                      <button type="button" onClick={() => setDeleteId(item.id)} className="rounded p-2 text-[#DC2626] hover:bg-[#FEE2E2]" title="Delete">
-                        <Trash2 size={16} />
-                      </button>
+                      {canManageNavigation ? (
+                        <>
+                          <button type="button" onClick={() => openEdit(item)} className="rounded p-2 hover:bg-[#F3F4F6]" title="Edit">
+                            <Edit size={16} />
+                          </button>
+                          <button type="button" onClick={() => setDeleteId(item.id)} className="rounded p-2 text-[#DC2626] hover:bg-[#FEE2E2]" title="Delete">
+                            <Trash2 size={16} />
+                          </button>
+                        </>
+                      ) : null}
                     </div>
                   </td>
                 </tr>
@@ -247,7 +270,7 @@ export default function NavigationManager() {
             <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
               Cancel
             </Button>
-            <Button type="button" className="bg-[#194890] hover:bg-[#2656A8]" onClick={submit}>
+            <Button type="button" className="bg-[#194890] hover:bg-[#2656A8]" onClick={submit} disabled={!canManageNavigation}>
               Save Link
             </Button>
           </DialogFooter>

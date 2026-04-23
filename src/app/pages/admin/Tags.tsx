@@ -131,13 +131,9 @@ export default function Tags() {
 
   return (
     <div>
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 md:mb-8">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold mb-2">Tags</h1>
-          <p className="text-sm md:text-base text-[#6B7280]">Manage article tags and keywords</p>
-          {!canDeleteOrMerge ? <p className="mt-1 text-xs font-semibold text-[#92400E]">Delete and merge actions are editor-only</p> : null}
-        </div>
-        <Button onClick={openCreate} className="bg-[#194890] hover:bg-[#2656A8] font-semibold">
+      <div className="mb-6 flex flex-wrap items-center gap-4 md:mb-8">
+        {!canDeleteOrMerge ? <p className="text-xs font-semibold text-[#92400E]">Delete and merge actions are editor-only</p> : null}
+        <Button onClick={openCreate} className="bg-[#194890] hover:bg-[#2656A8] font-semibold ml-auto">
           <Plus size={20} className="mr-2" />
           New Tag
         </Button>

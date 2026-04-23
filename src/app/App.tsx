@@ -86,7 +86,15 @@ const adminPages = adminEnabled
   : null;
 
 function RouteFallback() {
-  return <div className="min-h-[40vh] bg-white px-4 py-12 text-center text-sm text-[#6B7280]">Loading...</div>;
+  return (
+    <div className="min-h-screen bg-[#F3F4F6] px-4 py-16 text-center text-[#6B7280]">
+      <div className="mx-auto flex max-w-md flex-col items-center gap-3 rounded-xl border border-[#E5E7EB] bg-white px-6 py-8 shadow-sm">
+        <span className="h-8 w-8 rounded-full border-2 border-[#D1D5DB] border-t-[#194890] animate-spin" aria-hidden />
+        <p className="text-sm font-semibold text-[#111827]">Loading newsroom modules</p>
+        <p className="text-sm">Preparing the current section. This may take a moment after sign in.</p>
+      </div>
+    </div>
+  );
 }
 
 function buildCanonicalUrl(hostname: string) {

@@ -24,11 +24,6 @@ export default function AuditLog() {
 
   return (
     <div>
-      <div className="mb-6 md:mb-8">
-        <h1 className="mb-2 text-2xl font-bold md:text-3xl">Audit Log</h1>
-        <p className="text-sm text-[#6B7280] md:text-base">Review administrative activity and content changes recorded by the API.</p>
-      </div>
-
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="rounded-lg border border-[#E5E7EB] bg-white p-5">
           <p className="text-sm text-[#6B7280]">Events</p>

@@ -4,6 +4,7 @@ import { ArrowLeft, Save, Eye, Upload, X, Image as ImageIcon, Quote, Heading2, B
 import { toast } from '../../lib/notify';
 import { useCms } from '../../context/cms-context';
 import { useAuth } from '../../context/auth-context';
+import { hasMinimumRole } from '../../lib/admin/role-access';
 import { AiDraftAssistant } from '../../components/admin/AiDraftAssistant';
 import { ArticleMarkdown } from '../../components/articles/ArticleMarkdown';
 import { makeId, slugify, type AdminPost, type AdminUser, type AuthorProfile, type PostStatus } from '../../lib/admin/cms-state';
@@ -61,7 +62,7 @@ export default function PostEditor() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { state, dispatch } = useCms();
-  const { accessToken, refreshSession, signOut } = useAuth();
+  const { user, accessToken, refreshSession, signOut } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const authorDefaultUser = state.users[0];
@@ -76,6 +77,16 @@ export default function PostEditor() {
   const [detailLoading, setDetailLoading] = useState(false);
 
   const isEditing = !!id;
+  const canEditAnyPost = hasMinimumRole(user?.role, 'EDITOR');
+  const canCreatePosts = hasMinimumRole(user?.role, 'AUTHOR');
+  const canMutatePost = useMemo(() => {
+    if (!isEditing) return canCreatePosts;
+    if (canEditAnyPost) return true;
+    if (post.authorProfile?.id && user?.id && post.authorProfile.id === user.id) return true;
+    if (post.authorProfile?.email && user?.email && post.authorProfile.email.toLowerCase() === user.email.toLowerCase()) return true;
+    if (post.author && user?.name && post.author.trim().toLowerCase() === user.name.trim().toLowerCase()) return true;
+    return false;
+  }, [canCreatePosts, canEditAnyPost, isEditing, post.author, post.authorProfile, user?.email, user?.id, user?.name]);
 
   useEffect(() => {
     if (!id) setPost(emptyPost(authorDefault, authorDefaultProfile));
@@ -148,6 +159,10 @@ export default function PostEditor() {
   };
 
   const saveDraft = useCallback(() => {
+    if (!canMutatePost) {
+      toast.error('You can only edit your own posts.');
+      return;
+    }
     if (!post.title.trim()) {
       toast.error('Add a title before saving.');
       return;
@@ -164,7 +179,7 @@ export default function PostEditor() {
     setLastSaved(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
     toast.success('Draft saved.');
     if (!id) navigate(`/admin/posts/edit/${next.id}`, { replace: true });
-  }, [dispatch, id, navigate, post]);
+  }, [canMutatePost, dispatch, id, navigate, post]);
 
   const openPreview = useCallback(() => {
     if (!post.title.trim()) {
@@ -182,6 +197,10 @@ export default function PostEditor() {
   }, [post]);
 
   const publish = useCallback(() => {
+    if (!canMutatePost) {
+      toast.error('You can only edit your own posts.');
+      return;
+    }
     if (!post.title.trim() || !post.content.trim()) {
       toast.error('Add a title and body before publishing.');
       return;
@@ -201,7 +220,7 @@ export default function PostEditor() {
     setPost(next);
     toast.success('Post published to workspace.');
     if (!id) navigate(`/admin/posts/edit/${next.id}`, { replace: true });
-  }, [dispatch, id, navigate, post]);
+  }, [canMutatePost, dispatch, id, navigate, post]);
 
   const seoTitleLen = post.seoTitle.length;
   const metaLen = post.metaDescription.length;
@@ -225,6 +244,10 @@ export default function PostEditor() {
   const designPreviewContent = post.content.trim() || '## Live article preview\n\nStart writing in the editor and your headings, bullets, quotes, images, and links will render here as readers will see them.';
 
   const onFeaturedFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canMutatePost) {
+      toast.error('You can only edit your own posts.');
+      return;
+    }
     const file = e.target.files?.[0];
     if (!file || !file.type.startsWith('image/')) {
       toast.error('Choose an image file.');
@@ -253,6 +276,10 @@ export default function PostEditor() {
   };
 
   const insertBlock = (kind: 'image' | 'quote' | 'heading') => {
+    if (!canMutatePost) {
+      toast.error('You can only edit your own posts.');
+      return;
+    }
     const addition =
       kind === 'image'
         ? '\n\n![Caption](image-url)\n\n'
@@ -270,11 +297,11 @@ export default function PostEditor() {
           <Link to="/admin/posts" className="p-2 hover:bg-white rounded-lg transition">
             <ArrowLeft size={20} />
           </Link>
-          <div>
-            <h1 className="text-xl md:text-2xl font-bold">{isEditing ? 'Edit Post' : 'Create New Post'}</h1>
-            <p className="text-sm text-[#6B7280]">
-              {detailLoading ? 'Loading post body...' : `Draft${lastSaved ? ` - Last saved ${lastSaved}` : ' - Not saved yet'}`}
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-[#0F172A]">
+              {detailLoading ? 'Loading post…' : `Draft${lastSaved ? ` · Last saved ${lastSaved}` : ' · Not saved yet'}`}
             </p>
+            {isEditing && !canMutatePost ? <p className="mt-1 text-xs font-semibold text-[#92400E]">Read-only: you can only edit your own posts.</p> : null}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 md:gap-3 w-full md:w-auto">
@@ -289,7 +316,8 @@ export default function PostEditor() {
           <button
             type="button"
             onClick={saveDraft}
-            className="flex items-center gap-2 px-4 py-2 border border-[#E5E7EB] bg-white rounded-lg hover:bg-[#F3F4F6] transition text-sm"
+            disabled={!canMutatePost}
+            className="flex items-center gap-2 px-4 py-2 border border-[#E5E7EB] bg-white rounded-lg hover:bg-[#F3F4F6] transition text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Save size={18} />
             <span className="hidden sm:inline">Save Draft</span>
@@ -297,7 +325,8 @@ export default function PostEditor() {
           <button
             type="button"
             onClick={publish}
-            className="flex items-center justify-center gap-2 px-6 py-2 bg-[#194890] text-white rounded-lg hover:bg-[#2656A8] transition font-semibold text-sm"
+            disabled={!canMutatePost}
+            className="flex items-center justify-center gap-2 px-6 py-2 bg-[#194890] text-white rounded-lg hover:bg-[#2656A8] transition font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Publish
           </button>
@@ -308,12 +337,9 @@ export default function PostEditor() {
         <div className="lg:col-span-3 space-y-6">
           <AiDraftAssistant post={post} setPost={setPost} />
           <div className="overflow-hidden rounded-lg border border-[#DDE5F2] bg-white shadow-sm">
-            <div className="border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
+            <div className="border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-3">
               <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#194890]">Enterprise story workspace</p>
-                  <h2 className="mt-1 text-lg font-black text-[#0F172A]">Editor and design preview</h2>
-                </div>
+                <span className="text-xs font-bold uppercase tracking-wide text-[#64748B]">Story editor</span>
                 <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
                   <span className="inline-flex items-center gap-2 rounded-md border border-[#E2E8F0] bg-white px-3 py-2 text-xs font-semibold text-[#475569]">
                     <FileText size={14} />
@@ -388,10 +414,7 @@ export default function PostEditor() {
 
                 <section className="min-w-0 overflow-hidden rounded-lg border border-[#DDE5F2] bg-[#F8FAFC]">
                   <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#DDE5F2] bg-white px-4 py-3">
-                    <div>
-                      <p className="text-xs font-bold uppercase tracking-wide text-[#194890]">Reader design preview</p>
-                      <p className="text-xs text-[#64748B]">Markdown is rendered into article typography here.</p>
-                    </div>
+                    <span className="text-xs font-bold uppercase tracking-wide text-[#64748B]">Preview</span>
                     <button type="button" onClick={openPreview} className="inline-flex items-center gap-2 rounded-md border border-[#DDE5F2] px-3 py-2 text-xs font-bold text-[#194890] hover:bg-[#F8FAFC]">
                       <Eye size={14} />
                       Full preview
@@ -421,13 +444,13 @@ export default function PostEditor() {
           <div className="bg-white rounded-lg p-6 border border-[#E5E7EB]">
             <h3 className="font-bold mb-4">Publish</h3>
             <div className="space-y-3">
-              <button type="button" onClick={saveDraft} className="w-full px-4 py-2 border border-[#E5E7EB] rounded-lg hover:bg-[#F3F4F6] transition text-sm">
+              <button type="button" onClick={saveDraft} disabled={!canMutatePost} className="w-full px-4 py-2 border border-[#E5E7EB] rounded-lg hover:bg-[#F3F4F6] transition text-sm disabled:opacity-50 disabled:cursor-not-allowed">
                 Save Draft
               </button>
               <button type="button" onClick={openPreview} className="w-full px-4 py-2 border border-[#E5E7EB] rounded-lg hover:bg-[#F3F4F6] transition text-sm">
                 Preview
               </button>
-              <button type="button" onClick={publish} className="w-full px-4 py-2 bg-[#194890] text-white rounded-lg hover:bg-[#2656A8] transition text-sm font-semibold">
+              <button type="button" onClick={publish} disabled={!canMutatePost} className="w-full px-4 py-2 bg-[#194890] text-white rounded-lg hover:bg-[#2656A8] transition text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
                 Publish Now
               </button>
             </div>
@@ -519,7 +542,8 @@ export default function PostEditor() {
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="w-full border-2 border-dashed border-[#E5E7EB] rounded-lg p-8 text-center hover:border-[#194890]/40 transition"
+              disabled={!canMutatePost}
+              className="w-full border-2 border-dashed border-[#E5E7EB] rounded-lg p-8 text-center hover:border-[#194890]/40 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Upload className="mx-auto mb-2 text-[#6B7280]" size={32} />
               <p className="text-sm text-[#6B7280] mb-2">Upload or replace featured image</p>

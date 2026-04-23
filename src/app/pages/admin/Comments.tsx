@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { Search, Check, X, Trash2, Filter } from 'lucide-react';
 import { useCms } from '../../context/cms-context';
+import { useAuth } from '../../context/auth-context';
 import { formatRelative, type CommentStatus } from '../../lib/admin/cms-state';
+import { hasMinimumRole } from '../../lib/admin/role-access';
 import { toast } from '../../lib/notify';
 import {
   AlertDialog,
@@ -25,10 +27,13 @@ const PAGE = 6;
 
 export default function Comments() {
   const { state, dispatch } = useCms();
+  const { user } = useAuth();
   const [q, setQ] = useState('');
   const [status, setStatus] = useState<'all' | CommentStatus>('all');
   const [page, setPage] = useState(1);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const canModerate = hasMinimumRole(user?.role, 'EDITOR');
+  const canEditAnyPost = hasMinimumRole(user?.role, 'EDITOR');
 
   const pendingCount = state.comments.filter((c) => c.status === 'pending').length;
 
@@ -48,22 +53,32 @@ export default function Comments() {
   const slice = filtered.slice((pageSafe - 1) * PAGE, pageSafe * PAGE);
 
   const confirmDelete = () => {
+    if (!canModerate) {
+      toast.error('Editor access is required to delete comments.');
+      setDeleteId(null);
+      return;
+    }
     if (!deleteId) return;
     dispatch({ type: 'COMMENT_DELETE', id: deleteId });
     toast.success('Comment removed.');
     setDeleteId(null);
   };
 
+  const canEditLinkedPost = (postId: string) => {
+    const post = state.posts.find((item) => item.id === postId);
+    if (!post) return false;
+    if (canEditAnyPost) return true;
+    if (post.authorProfile?.id && user?.id && post.authorProfile.id === user.id) return true;
+    if (post.authorProfile?.email && user?.email && post.authorProfile.email.toLowerCase() === user.email.toLowerCase()) return true;
+    if (post.author && user?.name && post.author.trim().toLowerCase() === user.name.trim().toLowerCase()) return true;
+    return false;
+  };
+
   return (
     <div>
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 md:mb-8">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold mb-2">Comments</h1>
-          <p className="text-sm md:text-base text-[#6B7280]">Moderate and manage user comments</p>
-        </div>
-        <div className="flex gap-2">
-          <span className="px-3 py-2 bg-[#FEF3C7] text-[#92400E] rounded-lg text-sm font-semibold">{pendingCount} Pending</span>
-        </div>
+      <div className="mb-6 flex flex-wrap items-center gap-4 md:mb-8">
+        {!canModerate ? <p className="text-xs font-semibold text-[#92400E]">Read-only for your role</p> : null}
+        <span className="ml-auto rounded-lg bg-[#FEF3C7] px-3 py-2 text-sm font-semibold text-[#92400E]">{pendingCount} Pending</span>
       </div>
 
       <div className="bg-white rounded-lg border border-[#E5E7EB] overflow-hidden">
@@ -171,9 +186,13 @@ export default function Comments() {
                     <p className="text-sm text-[#6B7280] mb-2">
                       On:{' '}
                       {post ? (
-                        <Link to={`/admin/posts/edit/${post.id}`} className="text-[#194890] font-semibold hover:underline">
-                          {post.title}
-                        </Link>
+                        canEditLinkedPost(post.id) ? (
+                          <Link to={`/admin/posts/edit/${post.id}`} className="text-[#194890] font-semibold hover:underline">
+                            {post.title}
+                          </Link>
+                        ) : (
+                          <span className="font-semibold">{post.title}</span>
+                        )
                       ) : (
                         <span className="font-semibold">(deleted post)</span>
                       )}
@@ -182,7 +201,7 @@ export default function Comments() {
                     <p className="text-sm mb-4">{comment.content}</p>
 
                     <div className="flex flex-wrap gap-2">
-                      {comment.status === 'pending' && (
+                      {canModerate && comment.status === 'pending' ? (
                         <>
                           <button
                             type="button"
@@ -207,18 +226,20 @@ export default function Comments() {
                             Spam
                           </button>
                         </>
-                      )}
+                      ) : null}
                       <a href={`mailto:${comment.email}`} className="flex items-center gap-2 px-3 py-1.5 border border-[#E5E7EB] rounded-lg hover:bg-[#F3F4F6] transition text-sm">
                         Reply
                       </a>
-                      <button
-                        type="button"
-                        onClick={() => setDeleteId(comment.id)}
-                        className="flex items-center gap-2 px-3 py-1.5 border border-[#DC2626] text-[#DC2626] rounded-lg hover:bg-[#FEE2E2] transition text-sm"
-                      >
-                        <Trash2 size={16} />
-                        Delete
-                      </button>
+                      {canModerate ? (
+                        <button
+                          type="button"
+                          onClick={() => setDeleteId(comment.id)}
+                          className="flex items-center gap-2 px-3 py-1.5 border border-[#DC2626] text-[#DC2626] rounded-lg hover:bg-[#FEE2E2] transition text-sm"
+                        >
+                          <Trash2 size={16} />
+                          Delete
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -229,7 +250,7 @@ export default function Comments() {
 
         <div className="px-4 md:px-6 py-4 border-t border-[#E5E7EB] flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-sm text-[#6B7280]">
-            Page {pageSafe} of {totalPages} · {filtered.length} comment{filtered.length !== 1 ? 's' : ''}
+            Page {pageSafe} of {totalPages} - {filtered.length} comment{filtered.length !== 1 ? 's' : ''}
           </p>
           <div className="flex flex-wrap justify-center gap-2">
             <button

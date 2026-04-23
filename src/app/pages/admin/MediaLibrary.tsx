@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Upload, Search, Grid3x3, List, Trash2, Download, ExternalLink, Copy } from 'lucide-react';
 import { useAuth } from '../../context/auth-context';
 import { useCms } from '../../context/cms-context';
+import { hasMinimumRole } from '../../lib/admin/role-access';
 import type { AdminMedia } from '../../lib/admin/cms-state';
 import { uploadAdminMediaFile } from '../../lib/api-cms';
 import { toast } from '../../lib/notify';
@@ -42,7 +43,7 @@ function imageDimensions(file: File): Promise<{ width: number; height: number }>
 
 export default function MediaLibrary() {
   const { state, dispatch } = useCms();
-  const { accessToken } = useAuth();
+  const { user, accessToken } = useAuth();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [q, setQ] = useState('');
@@ -51,6 +52,8 @@ export default function MediaLibrary() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const canUploadOrEditAlt = hasMinimumRole(user?.role, 'AUTHOR');
+  const canDelete = hasMinimumRole(user?.role, 'EDITOR');
 
   const filtered = useMemo(() => {
     let list = state.media;
@@ -76,6 +79,10 @@ export default function MediaLibrary() {
   const totalBytes = state.media.reduce((a, m) => a + m.sizeBytes, 0);
 
   const onFiles = async (files: FileList | null) => {
+    if (!canUploadOrEditAlt) {
+      toast.error('Author access is required to upload media.');
+      return;
+    }
     if (!files?.length) return;
     if (!accessToken) {
       toast.error('Sign in again before uploading media.');
@@ -106,6 +113,10 @@ export default function MediaLibrary() {
   };
 
   const saveAlt = () => {
+    if (!canUploadOrEditAlt) {
+      toast.error('Author access is required to update alt text.');
+      return;
+    }
     if (!selected) return;
     dispatch({ type: 'MEDIA_UPDATE', item: { ...selected, alt: altDraft } });
     toast.success('Alt text saved.');
@@ -113,12 +124,9 @@ export default function MediaLibrary() {
 
   return (
     <div>
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 md:mb-8">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold mb-2">Media Library</h1>
-          <p className="text-sm md:text-base text-[#6B7280]">Upload and manage your images and files</p>
-        </div>
-        <Button className="bg-[#194890] hover:bg-[#2656A8] font-semibold" disabled={uploading} onClick={() => inputRef.current?.click()}>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 md:mb-8">
+        {!canUploadOrEditAlt ? <p className="text-xs font-semibold text-[#92400E]">Read-only for your role</p> : null}
+        <Button className="bg-[#194890] font-semibold hover:bg-[#2656A8] ml-auto" disabled={uploading || !canUploadOrEditAlt} onClick={() => inputRef.current?.click()}>
           <Upload size={20} className="mr-2" />
           {uploading ? 'Uploading...' : 'Upload Files'}
         </Button>
@@ -128,31 +136,31 @@ export default function MediaLibrary() {
           multiple
           className="hidden"
           accept="image/*,.pdf,.doc,.docx"
-          onChange={(e) => {
-            void onFiles(e.target.files);
-            e.target.value = '';
+          onChange={(event) => {
+            void onFiles(event.target.files);
+            event.target.value = '';
           }}
         />
       </div>
 
-      <div className="bg-white rounded-lg border border-[#E5E7EB] overflow-hidden">
-        <div className="p-4 md:p-6 border-b border-[#E5E7EB]">
-          <div className="flex flex-col xl:flex-row items-stretch xl:items-center gap-4">
-            <div className="flex-1 relative min-w-0">
+      <div className="overflow-hidden rounded-lg border border-[#E5E7EB] bg-white">
+        <div className="border-b border-[#E5E7EB] p-4 md:p-6">
+          <div className="flex flex-col items-stretch gap-4 xl:flex-row xl:items-center">
+            <div className="relative min-w-0 flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280]" size={18} />
               <input
                 type="search"
                 value={q}
-                onChange={(e) => setQ(e.target.value)}
+                onChange={(event) => setQ(event.target.value)}
                 placeholder="Search media..."
-                className="w-full pl-10 pr-4 py-2 border border-[#E5E7EB] rounded-lg"
+                className="w-full rounded-lg border border-[#E5E7EB] py-2 pl-10 pr-4"
               />
             </div>
-            <div className="flex flex-wrap gap-2 items-center">
+            <div className="flex flex-wrap items-center gap-2">
               <select
                 value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)}
-                className="px-4 py-2 border border-[#E5E7EB] rounded-lg bg-white text-sm"
+                onChange={(event) => setTypeFilter(event.target.value as typeof typeFilter)}
+                className="rounded-lg border border-[#E5E7EB] bg-white px-4 py-2 text-sm"
               >
                 <option value="all">All Media</option>
                 <option value="image">Images</option>
@@ -160,18 +168,18 @@ export default function MediaLibrary() {
               </select>
               <select
                 value={sort}
-                onChange={(e) => setSort(e.target.value as typeof sort)}
-                className="px-4 py-2 border border-[#E5E7EB] rounded-lg bg-white text-sm"
+                onChange={(event) => setSort(event.target.value as typeof sort)}
+                className="rounded-lg border border-[#E5E7EB] bg-white px-4 py-2 text-sm"
               >
                 <option value="date">Date Uploaded</option>
                 <option value="name">Name</option>
                 <option value="size">Size</option>
               </select>
-              <div className="flex border border-[#E5E7EB] rounded-lg overflow-hidden">
+              <div className="flex overflow-hidden rounded-lg border border-[#E5E7EB]">
                 <button
                   type="button"
                   onClick={() => setViewMode('grid')}
-                  className={`p-2 ${viewMode === 'grid' ? 'bg-[#F3F4F6]' : 'hover:bg-[#F3F4F6]'} transition`}
+                  className={`p-2 transition ${viewMode === 'grid' ? 'bg-[#F3F4F6]' : 'hover:bg-[#F3F4F6]'}`}
                   aria-label="Grid view"
                 >
                   <Grid3x3 size={18} />
@@ -179,7 +187,7 @@ export default function MediaLibrary() {
                 <button
                   type="button"
                   onClick={() => setViewMode('list')}
-                  className={`p-2 ${viewMode === 'list' ? 'bg-[#F3F4F6]' : 'hover:bg-[#F3F4F6]'} transition`}
+                  className={`p-2 transition ${viewMode === 'list' ? 'bg-[#F3F4F6]' : 'hover:bg-[#F3F4F6]'}`}
                   aria-label="List view"
                 >
                   <List size={18} />
@@ -193,36 +201,37 @@ export default function MediaLibrary() {
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
-            className="w-full border-2 border-dashed border-[#E5E7EB] rounded-lg p-12 text-center mb-6 hover:border-[#194890] transition cursor-pointer bg-[#FAFAFA]"
+            disabled={!canUploadOrEditAlt}
+            className="mb-6 w-full cursor-pointer rounded-lg border-2 border-dashed border-[#E5E7EB] bg-[#FAFAFA] p-12 text-center transition hover:border-[#194890] disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Upload className="mx-auto mb-4 text-[#6B7280]" size={48} />
-            <h3 className="font-bold mb-2">Drop files to upload</h3>
-            <p className="text-sm text-[#6B7280] mb-1">or click to browse from your computer</p>
+            <h3 className="mb-2 font-bold">Drop files to upload</h3>
+            <p className="mb-1 text-sm text-[#6B7280]">or click to browse from your computer</p>
             <p className="text-xs text-[#9CA3AF]">Uploaded to the API media library and Cloudflare R2 when configured</p>
           </button>
 
           {viewMode === 'grid' ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-5">
               {filtered.map((item) => (
                 <div
                   key={item.id}
                   role="button"
                   tabIndex={0}
                   onClick={() => setSelectedId(item.id)}
-                  onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setSelectedId(item.id)}
-                  className={`border rounded-lg overflow-hidden cursor-pointer transition ${
+                  onKeyDown={(event) => (event.key === 'Enter' || event.key === ' ') && setSelectedId(item.id)}
+                  className={`cursor-pointer overflow-hidden rounded-lg border transition ${
                     selectedId === item.id ? 'border-[#194890] ring-2 ring-[#194890]' : 'border-[#E5E7EB] hover:border-[#194890]'
                   }`}
                 >
-                  <div className="aspect-square bg-[#E5E7EB] flex items-center justify-center overflow-hidden">
+                  <div className="flex aspect-square items-center justify-center overflow-hidden bg-[#E5E7EB]">
                     {item.mime.startsWith('image/') ? (
-                      <img src={item.url} alt="" className="w-full h-full object-cover" />
+                      <img src={item.url} alt="" className="h-full w-full object-cover" />
                     ) : (
-                      <span className="text-[#6B7280] text-sm">File</span>
+                      <span className="text-sm text-[#6B7280]">File</span>
                     )}
                   </div>
-                  <div className="p-3 bg-white">
-                    <p className="text-sm font-semibold truncate">{item.name}</p>
+                  <div className="bg-white p-3">
+                    <p className="truncate text-sm font-semibold">{item.name}</p>
                     <p className="text-xs text-[#6B7280]">{formatBytes(item.sizeBytes)}</p>
                   </div>
                 </div>
@@ -233,28 +242,26 @@ export default function MediaLibrary() {
               <table className="w-full">
                 <thead className="bg-[#F3F4F6]">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-[#6B7280] uppercase">Preview</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-[#6B7280] uppercase">File Name</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-[#6B7280] uppercase">Size</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-[#6B7280] uppercase">Dimensions</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-[#6B7280] uppercase">Date</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-[#6B7280] uppercase">Actions</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-[#6B7280]">Preview</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-[#6B7280]">File Name</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-[#6B7280]">Size</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-[#6B7280]">Dimensions</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-[#6B7280]">Date</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-[#6B7280]">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E5E7EB]">
                   {filtered.map((item) => (
                     <tr key={item.id} className="hover:bg-[#F9FAFB]">
                       <td className="px-6 py-4">
-                        <button type="button" onClick={() => setSelectedId(item.id)} className="w-16 h-16 bg-[#E5E7EB] rounded overflow-hidden block">
-                          {item.mime.startsWith('image/') ? (
-                            <img src={item.url} alt="" className="w-full h-full object-cover" />
-                          ) : null}
+                        <button type="button" onClick={() => setSelectedId(item.id)} className="block h-16 w-16 overflow-hidden rounded bg-[#E5E7EB]">
+                          {item.mime.startsWith('image/') ? <img src={item.url} alt="" className="h-full w-full object-cover" /> : null}
                         </button>
                       </td>
                       <td className="px-6 py-4 text-sm font-semibold">{item.name}</td>
                       <td className="px-6 py-4 text-sm text-[#6B7280]">{formatBytes(item.sizeBytes)}</td>
                       <td className="px-6 py-4 text-sm text-[#6B7280]">
-                        {item.width}×{item.height}
+                        {item.width}x{item.height}
                       </td>
                       <td className="px-6 py-4 text-sm text-[#6B7280]">{new Date(item.uploadedAt).toLocaleDateString()}</td>
                       <td className="px-6 py-4">
@@ -262,22 +269,24 @@ export default function MediaLibrary() {
                           <a
                             href={item.url}
                             download={item.name}
-                            className="p-2 hover:bg-[#F3F4F6] rounded transition inline-flex"
+                            className="inline-flex rounded p-2 transition hover:bg-[#F3F4F6]"
                             title="Download"
                           >
                             <Download size={16} />
                           </a>
-                          <button type="button" onClick={() => window.open(item.url, '_blank')} className="p-2 hover:bg-[#F3F4F6] rounded transition" title="Open">
+                          <button type="button" onClick={() => window.open(item.url, '_blank')} className="rounded p-2 transition hover:bg-[#F3F4F6]" title="Open">
                             <ExternalLink size={16} />
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => setDeleteId(item.id)}
-                            className="p-2 hover:bg-[#FEE2E2] text-[#DC2626] rounded transition"
-                            title="Delete"
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                          {canDelete ? (
+                            <button
+                              type="button"
+                              onClick={() => setDeleteId(item.id)}
+                              className="rounded p-2 text-[#DC2626] transition hover:bg-[#FEE2E2]"
+                              title="Delete"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          ) : null}
                         </div>
                       </td>
                     </tr>
@@ -288,21 +297,21 @@ export default function MediaLibrary() {
           )}
         </div>
 
-        <div className="px-6 py-4 border-t border-[#E5E7EB] flex items-center justify-between flex-wrap gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#E5E7EB] px-6 py-4">
           <p className="text-sm text-[#6B7280]">
-            {state.media.length} files • {formatBytes(totalBytes)} total
+            {state.media.length} files - {formatBytes(totalBytes)} total
           </p>
         </div>
       </div>
 
       {selected && (
-        <div className="mt-6 bg-white rounded-lg border border-[#E5E7EB] p-6">
-          <h3 className="font-bold mb-4">File Details</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="mt-6 rounded-lg border border-[#E5E7EB] bg-white p-6">
+          <h3 className="mb-4 font-bold">File Details</h3>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div>
-              <div className="aspect-video bg-[#E5E7EB] rounded-lg mb-4 overflow-hidden flex items-center justify-center">
+              <div className="mb-4 flex aspect-video items-center justify-center overflow-hidden rounded-lg bg-[#E5E7EB]">
                 {selected.mime.startsWith('image/') ? (
-                  <img src={selected.url} alt={selected.alt} className="w-full h-full object-contain max-h-64" />
+                  <img src={selected.url} alt={selected.alt} className="max-h-64 h-full w-full object-contain" />
                 ) : (
                   <span className="text-[#6B7280]">Preview not available</span>
                 )}
@@ -310,21 +319,22 @@ export default function MediaLibrary() {
             </div>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold mb-2">Alt Text</label>
+                <label className="mb-2 block text-sm font-semibold">Alt Text</label>
                 <input
                   type="text"
                   value={altDraft}
-                  onChange={(e) => setAltDraft(e.target.value)}
-                  className="w-full px-4 py-2 border border-[#E5E7EB] rounded-lg"
+                  onChange={(event) => setAltDraft(event.target.value)}
+                  disabled={!canUploadOrEditAlt}
+                  className="w-full rounded-lg border border-[#E5E7EB] px-4 py-2"
                 />
-                <Button type="button" variant="outline" size="sm" className="mt-2" onClick={saveAlt}>
+                <Button type="button" variant="outline" size="sm" className="mt-2" disabled={!canUploadOrEditAlt} onClick={saveAlt}>
                   Save alt text
                 </Button>
               </div>
               <div>
-                <label className="block text-sm font-semibold mb-2">File URL</label>
+                <label className="mb-2 block text-sm font-semibold">File URL</label>
                 <div className="flex gap-2">
-                  <input type="text" value={selected.url.slice(0, 120) + (selected.url.length > 120 ? '…' : '')} readOnly className="flex-1 px-4 py-2 border border-[#E5E7EB] rounded-lg bg-[#F3F4F6] text-xs" />
+                  <input type="text" value={selected.url.slice(0, 120) + (selected.url.length > 120 ? '...' : '')} readOnly className="flex-1 rounded-lg border border-[#E5E7EB] bg-[#F3F4F6] px-4 py-2 text-xs" />
                   <Button type="button" variant="outline" size="icon" onClick={() => copyUrl(selected.url)} aria-label="Copy URL">
                     <Copy size={16} />
                   </Button>
@@ -342,7 +352,7 @@ export default function MediaLibrary() {
                 <div>
                   <p className="text-[#6B7280]">Dimensions</p>
                   <p className="font-semibold">
-                    {selected.width}×{selected.height}
+                    {selected.width}x{selected.height}
                   </p>
                 </div>
                 <div>
@@ -350,20 +360,22 @@ export default function MediaLibrary() {
                   <p className="font-semibold">{new Date(selected.uploadedAt).toLocaleString()}</p>
                 </div>
               </div>
-              <div className="flex gap-3 pt-4 flex-wrap">
-                <Button type="button" className="bg-[#194890] hover:bg-[#2656A8]" disabled={uploading} onClick={() => inputRef.current?.click()}>
+              <div className="flex flex-wrap gap-3 pt-4">
+                <Button type="button" className="bg-[#194890] hover:bg-[#2656A8]" disabled={uploading || !canUploadOrEditAlt} onClick={() => inputRef.current?.click()}>
                   Replace (upload new)
                 </Button>
-                <Button type="button" variant="destructive" onClick={() => setDeleteId(selected.id)}>
-                  Delete
-                </Button>
+                {canDelete ? (
+                  <Button type="button" variant="destructive" onClick={() => setDeleteId(selected.id)}>
+                    Delete
+                  </Button>
+                ) : null}
               </div>
             </div>
           </div>
         </div>
       )}
 
-      <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
+      <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete media?</AlertDialogTitle>
@@ -374,6 +386,11 @@ export default function MediaLibrary() {
             <AlertDialogAction
               className="bg-[#DC2626] hover:bg-[#B91C1C]"
               onClick={() => {
+                if (!canDelete) {
+                  toast.error('Editor access is required to delete media.');
+                  setDeleteId(null);
+                  return;
+                }
                 if (deleteId) {
                   dispatch({ type: 'MEDIA_DELETE', id: deleteId });
                   if (selectedId === deleteId) setSelectedId(null);

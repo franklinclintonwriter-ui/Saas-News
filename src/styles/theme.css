@@ -436,7 +436,11 @@
   stroke: #e2e8f0;
 }
 
-.admin-topbar {
+.admin-shell .admin-topbar {
+  background: color-mix(in srgb, var(--admin-panel-solid) 88%, transparent);
+  border-bottom-color: var(--admin-border);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04), 0 14px 34px rgba(15, 23, 42, 0.06);
 }
 
@@ -464,9 +468,18 @@
     linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
 }
 
-.dark .admin-topbar {
-  background: rgba(15, 23, 42, 0.86) !important;
-  border-color: rgba(51, 65, 85, 0.92) !important;
+.dark .admin-shell .admin-topbar {
+  background: color-mix(in srgb, var(--admin-panel-solid) 92%, transparent) !important;
+  border-bottom-color: var(--admin-border-strong) !important;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35), 0 12px 28px rgba(0, 0, 0, 0.25);
+}
+
+.dark .admin-shell thead {
+  background: var(--admin-muted-panel) !important;
+}
+
+.dark .admin-shell tbody tr:hover {
+  background: var(--admin-muted-panel) !important;
 }
 
 .dark .admin-shell [class~="bg-white"][class~="rounded-lg"][class~="border"],
@@ -476,11 +489,10 @@
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.22), 0 18px 42px rgba(0, 0, 0, 0.24);
 }
 
-.dark .admin-shell thead,
-.dark .admin-shell tbody tr:hover,
 .dark .admin-shell [class~="bg-[#F3F4F6]"],
-.dark .admin-shell [class~="bg-[#F9FAFB]"] {
-  background-color: #0f172a !important;
+.dark .admin-shell [class~="bg-[#F9FAFB]"],
+.dark .admin-shell [class~="bg-[#F8FAFC]"] {
+  background-color: var(--admin-muted-panel) !important;
 }
 
 .dark .admin-shell th {
@@ -501,4 +513,8 @@
 
 .dark .admin-shell .recharts-cartesian-grid line {
   stroke: #263244;
+}
+
+.dark .admin-shell .recharts-wrapper text {
+  fill: #94a3b8;
 }

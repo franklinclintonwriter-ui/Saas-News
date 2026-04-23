@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { TrendingUp, Users, Eye, Clock, ArrowUp, ArrowDown, Edit, Plus, Trash2 } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { useAuth } from '../../context/auth-context';
 import { useCms } from '../../context/cms-context';
+import { hasMinimumRole } from '../../lib/admin/role-access';
 import { makeId, type AnalyticsSnapshot } from '../../lib/admin/cms-state';
 import { toast } from '../../lib/notify';
 import { Button } from '../../components/ui/button';
@@ -53,11 +55,14 @@ function snapshotToForm(snapshot: AnalyticsSnapshot): SnapshotForm {
 }
 
 export default function Analytics() {
+  const { user } = useAuth();
   const { state, dispatch } = useCms();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<AnalyticsSnapshot | null>(null);
   const [form, setForm] = useState<SnapshotForm>(blankSnapshotForm);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const canManageSnapshots = hasMinimumRole(user?.role, 'EDITOR');
+  const canEditAnyPost = hasMinimumRole(user?.role, 'EDITOR');
 
   const topArticles = useMemo(
     () =>
@@ -121,6 +126,10 @@ export default function Analytics() {
   const growthLabel = growthRate === null ? 'No baseline' : `${growthRate >= 0 ? '+' : ''}${growthRate.toFixed(1)}%`;
 
   const openCreate = () => {
+    if (!canManageSnapshots) {
+      toast.error('Editor access is required to add analytics snapshots.');
+      return;
+    }
     const latest = state.analyticsSnapshots.at(-1);
     setEditing(null);
     setForm(latest ? { ...snapshotToForm(latest), date: new Date().toISOString().slice(0, 10) } : blankSnapshotForm());
@@ -128,6 +137,10 @@ export default function Analytics() {
   };
 
   const openEdit = (snapshot: AnalyticsSnapshot) => {
+    if (!canManageSnapshots) {
+      toast.error('Editor access is required to edit analytics snapshots.');
+      return;
+    }
     setEditing(snapshot);
     setForm(snapshotToForm(snapshot));
     setModalOpen(true);
@@ -138,6 +151,11 @@ export default function Analytics() {
   };
 
   const submitSnapshot = () => {
+    if (!canManageSnapshots) {
+      toast.error('Editor access is required to save analytics snapshots.');
+      setModalOpen(false);
+      return;
+    }
     const date = new Date(`${form.date}T00:00:00`);
     if (Number.isNaN(date.getTime())) {
       toast.error('Choose a valid snapshot date.');
@@ -156,22 +174,29 @@ export default function Analytics() {
   };
 
   const confirmDelete = () => {
+    if (!canManageSnapshots) {
+      toast.error('Editor access is required to delete analytics snapshots.');
+      setDeleteId(null);
+      return;
+    }
     if (!deleteId) return;
     dispatch({ type: 'ANALYTICS_SNAPSHOT_DELETE', id: deleteId });
     toast.success('Analytics snapshot deleted.');
     setDeleteId(null);
   };
 
+  const canEditArticle = (postId: string) => {
+    const post = state.posts.find((item) => item.id === postId);
+    if (!post) return false;
+    if (canEditAnyPost) return true;
+    if (post.authorProfile?.id && user?.id && post.authorProfile.id === user.id) return true;
+    if (post.authorProfile?.email && user?.email && post.authorProfile.email.toLowerCase() === user.email.toLowerCase()) return true;
+    if (post.author && user?.name && post.author.trim().toLowerCase() === user.name.trim().toLowerCase()) return true;
+    return false;
+  };
+
   return (
     <div>
-      <div className="mb-6 md:mb-8">
-        <h1 className="text-2xl md:text-3xl font-bold mb-2">Analytics</h1>
-        <p className="text-sm md:text-base text-[#6B7280]">Track your site performance and audience insights</p>
-        <p className="mt-2 text-xs text-[#6B7280] max-w-3xl rounded-lg border border-[#E5E7EB] bg-white px-3 py-2">
-          Live workspace totals: <strong>{totals.fmt(totals.views)}</strong> views across <strong>{totals.published}</strong> published posts. Charts below are loaded from Prisma analytics snapshots when available.
-        </p>
-      </div>
-
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8">
         {[
           { label: 'Total Views (workspace)', value: totals.fmt(totals.views), change: 'from posts', icon: Eye, positive: true },
@@ -280,9 +305,13 @@ export default function Analytics() {
               topArticles.map((article) => (
                 <div key={article.id} className="flex items-start justify-between pb-4 border-b border-[#E5E7EB] last:border-0">
                   <div className="flex-1 min-w-0">
-                    <Link to={`/admin/posts/edit/${article.id}`} className="font-semibold text-sm truncate text-[#194890] hover:underline block">
-                      {article.title}
-                    </Link>
+                    {canEditArticle(article.id) ? (
+                      <Link to={`/admin/posts/edit/${article.id}`} className="font-semibold text-sm truncate text-[#194890] hover:underline block">
+                        {article.title}
+                      </Link>
+                    ) : (
+                      <span className="block truncate text-sm font-semibold text-[#111827]">{article.title}</span>
+                    )}
                     <p className="text-xs text-[#6B7280] mt-1">{article.views.toLocaleString()} views</p>
                   </div>
                   <span className="ml-3 rounded-md bg-[#F1F5F9] px-2 py-1 text-xs font-semibold text-[#475569]">#{article.rank}</span>
@@ -315,11 +344,11 @@ export default function Analytics() {
 
       <div className="mt-6 rounded-lg border border-[#E5E7EB] bg-white p-4 md:p-6">
         <div className="mb-4 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-          <div>
+          <div className="min-w-0">
             <h2 className="text-lg font-bold md:text-xl">Analytics Snapshots</h2>
-            <p className="text-sm text-[#6B7280]">Maintain the live data series used by dashboard and analytics charts.</p>
+            {!canManageSnapshots ? <p className="mt-1 text-xs font-semibold text-[#92400E]">Read-only for your role</p> : null}
           </div>
-          <Button type="button" onClick={openCreate} className="bg-[#194890] hover:bg-[#2656A8]">
+          <Button type="button" onClick={openCreate} disabled={!canManageSnapshots} className="bg-[#194890] hover:bg-[#2656A8]">
             <Plus size={18} className="mr-2" />
             Add Snapshot
           </Button>
@@ -345,14 +374,16 @@ export default function Analytics() {
                   <td className="px-4 py-3 text-sm">{snapshot.sessions.toLocaleString()}</td>
                   <td className="px-4 py-3 text-sm">{snapshot.activeUsers.toLocaleString()}</td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <button type="button" onClick={() => openEdit(snapshot)} className="rounded p-2 hover:bg-[#F3F4F6]" title="Edit">
-                        <Edit size={16} />
-                      </button>
-                      <button type="button" onClick={() => setDeleteId(snapshot.id)} className="rounded p-2 text-[#DC2626] hover:bg-[#FEE2E2]" title="Delete">
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
+                    {canManageSnapshots ? (
+                      <div className="flex items-center gap-2">
+                        <button type="button" onClick={() => openEdit(snapshot)} className="rounded p-2 hover:bg-[#F3F4F6]" title="Edit">
+                          <Edit size={16} />
+                        </button>
+                        <button type="button" onClick={() => setDeleteId(snapshot.id)} className="rounded p-2 text-[#DC2626] hover:bg-[#FEE2E2]" title="Delete">
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ) : null}
                   </td>
                 </tr>
               ))}
@@ -402,7 +433,7 @@ export default function Analytics() {
             <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
               Cancel
             </Button>
-            <Button type="button" className="bg-[#194890] hover:bg-[#2656A8]" onClick={submitSnapshot}>
+            <Button type="button" className="bg-[#194890] hover:bg-[#2656A8]" onClick={submitSnapshot} disabled={!canManageSnapshots}>
               Save Snapshot
             </Button>
           </DialogFooter>
