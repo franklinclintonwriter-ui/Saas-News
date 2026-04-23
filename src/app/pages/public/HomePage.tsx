@@ -11,8 +11,34 @@ import { adminPostToListItem, allPublicListItems, imageUrlForPost, publishedPost
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+function HomePageSkeleton() {
+  return (
+    <div className="bg-[#F3F4F6]" aria-hidden>
+      <section className="bg-white py-6 md:py-12">
+        <div className="mx-auto max-w-[1440px] px-4">
+          <div className="grid grid-cols-1 gap-6 md:gap-8 lg:grid-cols-3">
+            <div className="h-[420px] animate-pulse rounded-lg bg-[#E5E7EB] lg:col-span-2" />
+            <div className="space-y-4">
+              {[0, 1, 2, 3].map((item) => (
+                <div key={item} className="flex gap-3 border-b border-[#E5E7EB] pb-4 last:border-0">
+                  <div className="h-24 w-24 shrink-0 animate-pulse rounded bg-[#E5E7EB]" />
+                  <div className="min-w-0 flex-1 space-y-2 pt-1">
+                    <div className="h-3 w-24 animate-pulse rounded bg-[#D1D5DB]" />
+                    <div className="h-4 w-full animate-pulse rounded bg-[#E5E7EB]" />
+                    <div className="h-4 w-2/3 animate-pulse rounded bg-[#E5E7EB]" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export default function HomePage() {
-  const { state } = useCms();
+  const { state, status } = useCms();
 
   const published = useMemo(() => publishedPosts(state.posts), [state.posts]);
   const listItems = useMemo(() => allPublicListItems(state), [state]);
@@ -53,11 +79,18 @@ export default function HomePage() {
     return [...published].sort((a, b) => b.views - a.views).slice(0, 3).map((p) => adminPostToListItem(state, p));
   }, [published, state]);
 
-  const techSection = useMemo(() => {
-    const tech = published.filter((p) => p.categorySlug === 'technology').sort((a, b) => b.views - a.views);
-    const hero = tech[0];
-    const side = tech.slice(1, 5).map((p) => adminPostToListItem(state, p));
-    return { hero, side };
+  const focusSection = useMemo(() => {
+    const categoryCounts = published.reduce<Map<string, number>>((map, post) => {
+      map.set(post.categorySlug, (map.get(post.categorySlug) ?? 0) + 1);
+      return map;
+    }, new Map());
+    const categorySlug =
+      [...categoryCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? published[0]?.categorySlug ?? '';
+    const categoryName = state.categories.find((category) => category.slug === categorySlug)?.name || 'Local Focus';
+    const rows = published.filter((p) => p.categorySlug === categorySlug).sort((a, b) => b.views - a.views);
+    const hero = rows[0];
+    const side = rows.slice(1, 5).map((p) => adminPostToListItem(state, p));
+    return { categoryName, hero, side };
   }, [published, state]);
 
   const videoHighlights = useMemo(() => {
@@ -94,6 +127,8 @@ export default function HomePage() {
       toast.error(error instanceof Error ? error.message : 'Unable to subscribe right now.');
     }
   };
+
+  if (!featuredItem && status === 'loading') return <HomePageSkeleton />;
 
   if (!featuredItem) {
     return (
@@ -243,29 +278,29 @@ export default function HomePage() {
 
       <section className="py-8 md:py-12">
         <div className="max-w-[1440px] mx-auto px-4">
-          <h2 className="text-xl md:text-2xl font-bold mb-4 md:mb-6">Technology</h2>
+          <h2 className="text-xl md:text-2xl font-bold mb-4 md:mb-6">{focusSection.categoryName}</h2>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
             <div className="lg:col-span-2">
-              {techSection.hero ? (
-                <Link to={`/article/${techSection.hero.id}`} className="block bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition">
+              {focusSection.hero ? (
+                <Link to={`/article/${focusSection.hero.id}`} className="block bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition">
                   <div className="h-64 bg-[#E5E7EB] sm:h-72 lg:h-80 overflow-hidden">
                     {(() => {
-                      const url = imageByPostId.get(techSection.hero!.id);
+                      const url = imageByPostId.get(focusSection.hero!.id);
                       return url ? <img src={url} alt="" className="w-full h-full object-cover" /> : null;
                     })()}
                   </div>
                   <div className="p-6">
-                    <span className="text-sm text-[#194890] font-semibold">Technology</span>
-                    <h3 className="text-xl font-bold mt-2 mb-3">{techSection.hero.title}</h3>
-                    <p className="text-[#6B7280]">{techSection.hero.excerpt}</p>
+                    <span className="text-sm text-[#194890] font-semibold">{focusSection.categoryName}</span>
+                    <h3 className="text-xl font-bold mt-2 mb-3">{focusSection.hero.title}</h3>
+                    <p className="text-[#6B7280]">{focusSection.hero.excerpt}</p>
                   </div>
                 </Link>
               ) : (
-                <div className="rounded-lg border border-[#E5E7EB] bg-white p-8 text-[#6B7280]">No technology stories published yet.</div>
+                <div className="rounded-lg border border-[#E5E7EB] bg-white p-8 text-[#6B7280]">No local stories published yet.</div>
               )}
             </div>
             <div className="space-y-4">
-              {techSection.side.map((news) => (
+              {focusSection.side.map((news) => (
                 <Link key={news.id} to={`/article/${news.id}`} className="flex gap-3 pb-4 border-b border-[#E5E7EB] last:border-0 group">
                   <div className="w-20 h-20 bg-[#E5E7EB] rounded flex-shrink-0 overflow-hidden">
                     {(() => {

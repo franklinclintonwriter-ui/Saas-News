@@ -1,9 +1,12 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { ArrowLeft, Clock, Edit, User } from 'lucide-react';
 import { useCms } from '../../context/cms-context';
-import { categoryLabelForSlug, escapeHtml } from '../../lib/public-content';
+import { useAuth } from '../../context/auth-context';
+import { ArticleMarkdown } from '../../components/articles/ArticleMarkdown';
+import { categoryLabelForSlug } from '../../lib/public-content';
 import { formatRelative, type AdminPost } from '../../lib/admin/cms-state';
+import { fetchAdminPostDetail, isExpiredAuthError } from '../../lib/api-cms';
 import { generatedPostImageDataUrl } from '../../lib/generated-post-image';
 
 const PREVIEW_KEY_PREFIX = 'phulpur24_post_preview_';
@@ -20,79 +23,69 @@ function readPreviewDraft(id: string | undefined): AdminPost | null {
   }
 }
 
-function slugFromHeading(label: string): string {
-  return label
-    .toLowerCase()
-    .replace(/[^\w\s-]/g, '')
-    .trim()
-    .replace(/\s+/g, '-');
-}
-
-function renderInline(text: string): React.ReactNode {
-  const parts = text.split(/\*\*/);
-  return parts.map((part, idx) =>
-    idx % 2 === 1 ? (
-      <strong key={idx}>{escapeHtml(part)}</strong>
-    ) : (
-      <React.Fragment key={idx}>{escapeHtml(part)}</React.Fragment>
-    ),
-  );
-}
-
-function ArticleMarkdown({ content }: { content: string }) {
-  const blocks = content
-    .split(/\n\n+/)
-    .map((block) => block.trim())
-    .filter(Boolean);
-
-  return (
-    <div className="prose max-w-none">
-      {blocks.map((block, index) => {
-        if (block.startsWith('## ')) {
-          const label = block.slice(3).trim();
-          return (
-            <h2 key={index} id={slugFromHeading(label)} className="mt-8 mb-4 scroll-mt-24 text-2xl font-bold">
-              {escapeHtml(label)}
-            </h2>
-          );
-        }
-        if (block.startsWith('>')) {
-          const lines = block
-            .split('\n')
-            .map((line) => line.replace(/^>\s?/, '').trim())
-            .join(' ');
-          return (
-            <div key={index} className="my-8 border-l-4 border-[#194890] bg-[#F3F4F6] p-6">
-              <p className="text-lg italic">{renderInline(lines)}</p>
-            </div>
-          );
-        }
-        const lines = block.split('\n').filter((line) => line.trim());
-        if (lines.length && lines.every((line) => /^[-*]\s+/.test(line))) {
-          return (
-            <ul key={index} className="mb-6 list-disc space-y-2 pl-6 text-lg leading-relaxed">
-              {lines.map((line, itemIndex) => (
-                <li key={itemIndex}>{renderInline(line.replace(/^[-*]\s+/, '').trim())}</li>
-              ))}
-            </ul>
-          );
-        }
-        return (
-          <p key={index} className="mb-6 text-lg leading-relaxed">
-            {renderInline(block)}
-          </p>
-        );
-      })}
-    </div>
-  );
-}
-
 export default function PostPreview() {
   const { id } = useParams();
-  const { state } = useCms();
+  const { state, dispatch } = useCms();
+  const { accessToken, refreshSession, signOut } = useAuth();
+  const [remotePost, setRemotePost] = useState<AdminPost | null>(null);
+  const [detailFailed, setDetailFailed] = useState(false);
   const sessionDraft = useMemo(() => readPreviewDraft(id), [id]);
   const storedPost = state.posts.find((post) => post.id === id);
-  const post = sessionDraft ?? storedPost;
+  const post = sessionDraft ?? remotePost ?? storedPost;
+
+  const loadPostDetail = useCallback(
+    async (postId: string): Promise<AdminPost> => {
+      let token = accessToken;
+      if (!token) throw new Error('Sign in to load this preview.');
+      try {
+        return await fetchAdminPostDetail(postId, token);
+      } catch (error) {
+        if (!isExpiredAuthError(error)) throw error;
+        token = await refreshSession();
+        if (!token) {
+          signOut();
+          throw new Error('Session expired. Please sign in again.');
+        }
+        return fetchAdminPostDetail(postId, token);
+      }
+    },
+    [accessToken, refreshSession, signOut],
+  );
+
+  useEffect(() => {
+    if (!id || !accessToken || sessionDraft) return;
+    if (storedPost?.content.trim()) return;
+
+    let cancelled = false;
+    setDetailFailed(false);
+    void loadPostDetail(id)
+      .then((fullPost) => {
+        if (cancelled) return;
+        setRemotePost(fullPost);
+        dispatch({ type: 'POST_DETAIL_HYDRATE', post: fullPost });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRemotePost(null);
+          setDetailFailed(true);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, dispatch, id, loadPostDetail, sessionDraft, storedPost]);
+
+  if (!post && id && accessToken && !detailFailed) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-white px-4">
+        <div className="max-w-md text-center">
+          <h1 className="mb-2 text-2xl font-bold">Loading preview...</h1>
+          <p className="mb-6 text-[#6B7280]">Fetching the full article body.</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!post) {
     return (
@@ -157,7 +150,7 @@ export default function PostPreview() {
           <div className="mb-8 h-[320px] w-full overflow-hidden rounded-lg bg-[#E5E7EB] md:h-[480px]">
             <img src={heroUrl} alt="" className="h-full w-full object-cover" />
           </div>
-          <ArticleMarkdown content={post.content || 'Start writing your article body to preview it here.'} />
+          <ArticleMarkdown content={post.content || 'Start writing your article body to preview it here.'} variant="admin" />
         </div>
       </main>
     </div>

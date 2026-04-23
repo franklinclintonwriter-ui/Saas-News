@@ -1,10 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router';
-import { ArrowLeft, Save, Eye, Upload, X, Image as ImageIcon, Quote, Heading2 } from 'lucide-react';
+import { ArrowLeft, Save, Eye, Upload, X, Image as ImageIcon, Quote, Heading2, BookOpen, FileText, Hash } from 'lucide-react';
 import { toast } from '../../lib/notify';
 import { useCms } from '../../context/cms-context';
+import { useAuth } from '../../context/auth-context';
 import { AiDraftAssistant } from '../../components/admin/AiDraftAssistant';
+import { ArticleMarkdown } from '../../components/articles/ArticleMarkdown';
 import { makeId, slugify, type AdminPost, type AdminUser, type AuthorProfile, type PostStatus } from '../../lib/admin/cms-state';
+import { fetchAdminPostDetail, isExpiredAuthError } from '../../lib/api-cms';
 import { generatedPostImageDataUrl } from '../../lib/generated-post-image';
 
 const PREVIEW_KEY_PREFIX = 'phulpur24_post_preview_';
@@ -58,8 +61,8 @@ export default function PostEditor() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { state, dispatch } = useCms();
+  const { accessToken, refreshSession, signOut } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const blockInputRef = useRef<HTMLInputElement>(null);
 
   const authorDefaultUser = state.users[0];
   const authorDefault = authorDefaultUser?.name ?? 'Editor';
@@ -70,6 +73,7 @@ export default function PostEditor() {
   const [post, setPost] = useState<AdminPost>(() => existing ?? emptyPost(authorDefault, authorDefaultProfile));
   const [tagInput, setTagInput] = useState('');
   const [lastSaved, setLastSaved] = useState<string | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   const isEditing = !!id;
 
@@ -80,12 +84,59 @@ export default function PostEditor() {
   useEffect(() => {
     if (!id) return;
     const found = state.posts.find((p) => p.id === id);
-    if (found) setPost(found);
-    else {
+    if (found) {
+      setPost(found);
+    } else if (!accessToken) {
       toast.error('Post not found.');
       navigate('/admin/posts', { replace: true });
     }
-  }, [id, state.posts, navigate]);
+  }, [accessToken, id, state.posts, navigate]);
+
+  const loadPostDetail = useCallback(
+    async (postId: string): Promise<AdminPost> => {
+      let token = accessToken;
+      if (!token) throw new Error('Sign in to load this post.');
+      try {
+        return await fetchAdminPostDetail(postId, token);
+      } catch (error) {
+        if (!isExpiredAuthError(error)) throw error;
+        token = await refreshSession();
+        if (!token) {
+          signOut();
+          throw new Error('Session expired. Please sign in again.');
+        }
+        return fetchAdminPostDetail(postId, token);
+      }
+    },
+    [accessToken, refreshSession, signOut],
+  );
+
+  useEffect(() => {
+    if (!id || !accessToken) return;
+    const found = state.posts.find((p) => p.id === id);
+    if (found?.content.trim()) return;
+
+    let cancelled = false;
+    setDetailLoading(true);
+    void loadPostDetail(id)
+      .then((fullPost) => {
+        if (cancelled) return;
+        dispatch({ type: 'POST_DETAIL_HYDRATE', post: fullPost });
+        setPost((current) => (current.id === fullPost.id && !current.content.trim() ? fullPost : current));
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        toast.error(error instanceof Error ? error.message : 'Post not found.');
+        navigate('/admin/posts', { replace: true });
+      })
+      .finally(() => {
+        if (!cancelled) setDetailLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, dispatch, id, loadPostDetail, navigate, state.posts]);
 
   const handleTitle = (title: string) => {
     setPost((p) => ({
@@ -164,6 +215,14 @@ export default function PostEditor() {
     () => generatedPostImageDataUrl(post.title || 'Untitled story', selectedCategoryName, post.id),
     [post.id, post.title, selectedCategoryName],
   );
+  const contentStats = useMemo(() => {
+    const words = post.content.trim().split(/\s+/).filter(Boolean).length;
+    const headings = (post.content.match(/^#{1,6}\s+/gm) ?? []).length;
+    const images = (post.content.match(/^!\[[^\]]*]/gm) ?? []).length;
+    const readMinutes = Math.max(1, Math.round(words / 220));
+    return { words, headings, images, readMinutes };
+  }, [post.content]);
+  const designPreviewContent = post.content.trim() || '## Live article preview\n\nStart writing in the editor and your headings, bullets, quotes, images, and links will render here as readers will see them.';
 
   const onFeaturedFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -194,7 +253,6 @@ export default function PostEditor() {
   };
 
   const insertBlock = (kind: 'image' | 'quote' | 'heading') => {
-    const input = blockInputRef.current;
     const addition =
       kind === 'image'
         ? '\n\n![Caption](image-url)\n\n'
@@ -203,7 +261,6 @@ export default function PostEditor() {
           : '\n\n## Section heading\n\n';
     setPost((p) => ({ ...p, content: p.content + addition }));
     toast.message(`${kind === 'image' ? 'Image' : kind === 'quote' ? 'Quote' : 'Heading'} block inserted.`);
-    input?.focus();
   };
 
   return (
@@ -216,7 +273,7 @@ export default function PostEditor() {
           <div>
             <h1 className="text-xl md:text-2xl font-bold">{isEditing ? 'Edit Post' : 'Create New Post'}</h1>
             <p className="text-sm text-[#6B7280]">
-              Draft{lastSaved ? ` • Last saved ${lastSaved}` : ' • Not saved yet'}
+              {detailLoading ? 'Loading post body...' : `Draft${lastSaved ? ` - Last saved ${lastSaved}` : ' - Not saved yet'}`}
             </p>
           </div>
         </div>
@@ -250,59 +307,114 @@ export default function PostEditor() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="lg:col-span-3 space-y-6">
           <AiDraftAssistant post={post} setPost={setPost} />
-          <div className="bg-white rounded-lg p-6 border border-[#E5E7EB]">
-            <input
-              type="text"
-              value={post.title}
-              onChange={(e) => handleTitle(e.target.value)}
-              placeholder="Enter post title..."
-              className="w-full text-3xl font-bold mb-4 outline-none"
-            />
-            <input
-              type="text"
-              value={post.slug}
-              onChange={(e) => setPost((p) => ({ ...p, slug: e.target.value }))}
-              placeholder="url-slug"
-              className="w-full text-sm text-[#6B7280] mb-6 outline-none border-b border-[#E5E7EB] pb-2 font-mono"
-            />
-            <textarea
-              value={post.content}
-              onChange={(e) => setPost((p) => ({ ...p, content: e.target.value }))}
-              placeholder="Start writing your article..."
-              className="w-full min-h-[500px] outline-none resize-none text-lg leading-relaxed"
-            />
-          </div>
+          <div className="overflow-hidden rounded-lg border border-[#DDE5F2] bg-white shadow-sm">
+            <div className="border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-4">
+              <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#194890]">Enterprise story workspace</p>
+                  <h2 className="mt-1 text-lg font-black text-[#0F172A]">Editor and design preview</h2>
+                </div>
+                <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+                  <span className="inline-flex items-center gap-2 rounded-md border border-[#E2E8F0] bg-white px-3 py-2 text-xs font-semibold text-[#475569]">
+                    <FileText size={14} />
+                    {contentStats.words.toLocaleString()} words
+                  </span>
+                  <span className="inline-flex items-center gap-2 rounded-md border border-[#E2E8F0] bg-white px-3 py-2 text-xs font-semibold text-[#475569]">
+                    <Hash size={14} />
+                    {contentStats.headings} headings
+                  </span>
+                  <span className="inline-flex items-center gap-2 rounded-md border border-[#E2E8F0] bg-white px-3 py-2 text-xs font-semibold text-[#475569]">
+                    <ImageIcon size={14} />
+                    {contentStats.images} inline images
+                  </span>
+                  <span className="inline-flex items-center gap-2 rounded-md border border-[#E2E8F0] bg-white px-3 py-2 text-xs font-semibold text-[#475569]">
+                    <BookOpen size={14} />
+                    {post.readTime || `${contentStats.readMinutes} min read`}
+                  </span>
+                </div>
+              </div>
+            </div>
 
-          <div className="bg-white rounded-lg p-6 border border-[#E5E7EB]">
-            <h3 className="font-bold mb-4">Content Blocks</h3>
-            <input ref={blockInputRef} className="sr-only" tabIndex={-1} aria-hidden readOnly />
-            <div className="space-y-3">
-              <button
-                type="button"
-                onClick={() => insertBlock('image')}
-                className="w-full flex items-center gap-3 px-4 py-3 border border-[#E5E7EB] rounded-lg hover:bg-[#F3F4F6] transition text-left"
-              >
-                <ImageIcon size={18} />
-                <span>Add Image</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => insertBlock('quote')}
-                className="w-full flex items-center gap-3 px-4 py-3 border border-[#E5E7EB] rounded-lg hover:bg-[#F3F4F6] transition text-left"
-              >
-                <Quote size={18} />
-                <span>Add Quote</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => insertBlock('heading')}
-                className="w-full flex items-center gap-3 px-4 py-3 border border-[#E5E7EB] rounded-lg hover:bg-[#F3F4F6] transition text-left"
-              >
-                <Heading2 size={18} />
-                <span>Add Heading</span>
-              </button>
+            <div className="p-5">
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+                <section className="min-w-0 space-y-4">
+                  <div>
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#64748B]">Story title</label>
+                    <input
+                      type="text"
+                      value={post.title}
+                      onChange={(e) => handleTitle(e.target.value)}
+                      placeholder="Enter post title..."
+                      className="w-full rounded-lg border border-[#E2E8F0] px-4 py-3 text-2xl font-black text-[#0F172A] outline-none transition focus:border-[#194890] focus:ring-4 focus:ring-[#194890]/10 md:text-3xl"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#64748B]">Permalink slug</label>
+                    <input
+                      type="text"
+                      value={post.slug}
+                      onChange={(e) => setPost((p) => ({ ...p, slug: e.target.value }))}
+                      placeholder="url-slug"
+                      className="w-full rounded-lg border border-[#E2E8F0] px-4 py-2 font-mono text-sm text-[#475569] outline-none transition focus:border-[#194890] focus:ring-4 focus:ring-[#194890]/10"
+                    />
+                  </div>
+
+                  <div className="rounded-lg border border-[#E2E8F0]">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2">
+                      <span className="text-xs font-bold uppercase tracking-wide text-[#64748B]">Markdown editor</span>
+                      <div className="flex flex-wrap gap-1">
+                        <button type="button" onClick={() => insertBlock('heading')} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-[#475569] hover:bg-white">
+                          <Heading2 size={14} />
+                          Heading
+                        </button>
+                        <button type="button" onClick={() => insertBlock('quote')} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-[#475569] hover:bg-white">
+                          <Quote size={14} />
+                          Quote
+                        </button>
+                        <button type="button" onClick={() => insertBlock('image')} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-[#475569] hover:bg-white">
+                          <ImageIcon size={14} />
+                          Image
+                        </button>
+                      </div>
+                    </div>
+                    <textarea
+                      value={post.content}
+                      onChange={(e) => setPost((p) => ({ ...p, content: e.target.value }))}
+                      placeholder="Write the article body. Use the live preview to inspect the final design."
+                      className="min-h-[620px] w-full resize-y border-0 bg-white px-4 py-4 font-mono text-sm leading-7 text-[#1F2937] outline-none"
+                    />
+                  </div>
+                </section>
+
+                <section className="min-w-0 overflow-hidden rounded-lg border border-[#DDE5F2] bg-[#F8FAFC]">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#DDE5F2] bg-white px-4 py-3">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wide text-[#194890]">Reader design preview</p>
+                      <p className="text-xs text-[#64748B]">Markdown is rendered into article typography here.</p>
+                    </div>
+                    <button type="button" onClick={openPreview} className="inline-flex items-center gap-2 rounded-md border border-[#DDE5F2] px-3 py-2 text-xs font-bold text-[#194890] hover:bg-[#F8FAFC]">
+                      <Eye size={14} />
+                      Full preview
+                    </button>
+                  </div>
+                  <div className="max-h-[760px] overflow-y-auto bg-white">
+                    <div className="border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-5">
+                      <span className="mb-3 inline-flex rounded-md bg-[#194890] px-2.5 py-1 text-xs font-bold text-white">{selectedCategoryName}</span>
+                      <h1 className="text-3xl font-black leading-tight text-[#0F172A]">{post.title || 'Untitled story'}</h1>
+                      <p className="mt-3 text-base leading-7 text-[#64748B]">{post.excerpt || post.metaDescription || 'The excerpt or meta description will appear here.'}</p>
+                    </div>
+                    <div className="h-52 overflow-hidden bg-[#E5E7EB]">
+                      <img src={featuredImage?.url || generatedPreviewImage} alt="" className="h-full w-full object-cover" />
+                    </div>
+                    <div className="px-5 py-6">
+                      <ArticleMarkdown content={designPreviewContent} variant="admin" />
+                    </div>
+                  </div>
+                </section>
+              </div>
             </div>
           </div>
+
         </div>
 
         <div className="lg:col-span-1 space-y-6">

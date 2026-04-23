@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { useForm } from 'react-hook-form';
 import { Clock, User, Facebook, Twitter, Linkedin, Mail, ChevronRight, Globe2, MapPin } from 'lucide-react';
@@ -6,39 +6,23 @@ import { useCms } from '../../context/cms-context';
 import { formatRelative } from '../../lib/admin/cms-state';
 import {
   approvedCommentsForPost,
-  escapeHtml,
   extractTocFromMarkdown,
   popularListItems,
   resolveArticle,
 } from '../../lib/public-content';
-import { openExternal, shareTargets } from '../../lib/share-links';
+import { openExternal, shareArticleMetaUrl, shareTargets } from '../../lib/share-links';
 import { toast } from '../../lib/notify';
 import AdSlot from '../../components/public/AdSlot';
+import { ArticleMarkdown } from '../../components/articles/ArticleMarkdown';
+import { fetchPublicPostDetail } from '../../lib/api-cms';
+import { API_BASE_URL } from '../../lib/api-client';
+import { useAuth } from '../../context/auth-context';
 
 type CommentForm = {
   body: string;
   name: string;
   email: string;
 };
-
-function slugFromHeading(label: string): string {
-  return label
-    .toLowerCase()
-    .replace(/[^\w\s-]/g, '')
-    .trim()
-    .replace(/\s+/g, '-');
-}
-
-function renderInline(text: string): React.ReactNode {
-  const parts = text.split(/\*\*/);
-  return parts.map((part, idx) =>
-    idx % 2 === 1 ? (
-      <strong key={idx}>{escapeHtml(part)}</strong>
-    ) : (
-      <React.Fragment key={idx}>{escapeHtml(part)}</React.Fragment>
-    ),
-  );
-}
 
 function initials(name: string): string {
   return name
@@ -49,74 +33,64 @@ function initials(name: string): string {
     .join('') || '?';
 }
 
-function ArticleMarkdown({ content }: { content: string }) {
-  const blocks = content
-    .split(/\n\n+/)
-    .map((b) => b.trim())
-    .filter(Boolean);
-
-  return (
-    <div className="prose max-w-none">
-      {blocks.map((block, i) => {
-        if (block.startsWith('## ')) {
-          const label = block.slice(3).trim();
-          const hid = slugFromHeading(label) || `section-${i}`;
-          return (
-            <h2 key={i} id={hid} className="text-2xl font-bold mt-8 mb-4 scroll-mt-24">
-              {escapeHtml(label)}
-            </h2>
-          );
-        }
-        if (block.startsWith('>')) {
-          const lines = block
-            .split('\n')
-            .map((l) => l.replace(/^>\s?/, '').trim())
-            .join(' ');
-          return (
-            <div key={i} className="bg-[#F3F4F6] border-l-4 border-[#194890] p-6 my-8">
-              <p className="text-lg italic">{renderInline(lines)}</p>
-            </div>
-          );
-        }
-        const lines = block.split('\n').filter((l) => l.trim());
-        if (lines.length && lines.every((l) => /^[-*]\s+/.test(l))) {
-          const items = lines.map((l) => l.replace(/^[-*]\s+/, '').trim());
-          return (
-            <ul key={i} className="list-disc pl-6 mb-6 space-y-2 text-lg leading-relaxed">
-              {items.map((it, j) => (
-                <li key={j}>{renderInline(it)}</li>
-              ))}
-            </ul>
-          );
-        }
-        return (
-          <p key={i} className="text-lg leading-relaxed mb-6">
-            {renderInline(block)}
-          </p>
-        );
-      })}
-    </div>
-  );
-}
-
 export default function ArticlePage() {
   const { id } = useParams();
-  const { state, dispatch } = useCms();
-  const resolved = useMemo(() => resolveArticle(state, id), [state, id]);
+  const { state, status, dispatch } = useCms();
+  const { user } = useAuth();
+  const [detail, setDetail] = useState<Awaited<ReturnType<typeof fetchPublicPostDetail>> | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const articleState = useMemo(() => {
+    if (!detail) return state;
+    return {
+      ...state,
+      posts: [detail.post, ...state.posts.filter((post) => post.id !== detail.post.id && post.slug !== detail.post.slug)],
+      media: [...detail.media, ...state.media.filter((media) => !detail.media.some((item) => item.id === media.id))],
+      comments: [...detail.comments, ...state.comments.filter((comment) => !detail.comments.some((item) => item.id === comment.id))],
+    };
+  }, [detail, state]);
+  const resolved = useMemo(() => resolveArticle(articleState, id), [articleState, id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const current = resolveArticle(state, id);
+    if (!id || current?.post?.content.trim()) {
+      setDetail(null);
+      setDetailLoading(false);
+      return;
+    }
+    setDetailLoading(true);
+    fetchPublicPostDetail(id)
+      .then((next) => {
+        if (!cancelled) setDetail(next);
+      })
+      .catch(() => {
+        if (!cancelled) setDetail(null);
+      })
+      .finally(() => {
+        if (!cancelled) setDetailLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, state]);
 
   const article = resolved?.detail;
   const pageUrl = typeof window !== 'undefined' ? window.location.href : '';
+  const shareUrl = useMemo(() => {
+    const idOrSlug = resolved?.post?.slug || resolved?.post?.id || id;
+    return idOrSlug ? shareArticleMetaUrl(API_BASE_URL, idOrSlug) : pageUrl;
+  }, [id, pageUrl, resolved?.post?.id, resolved?.post?.slug]);
   const share = useMemo(
-    () => (article ? shareTargets(pageUrl, article.title) : shareTargets(pageUrl, state.settings.siteTitle || 'Publication')),
-    [pageUrl, article, state.settings.siteTitle],
+    () => (article ? shareTargets(pageUrl, article.title, shareUrl) : shareTargets(pageUrl, articleState.settings.siteTitle || 'Publication', shareUrl)),
+    [pageUrl, article, articleState.settings.siteTitle, shareUrl],
   );
 
   const toc = useMemo(() => (resolved?.body ? extractTocFromMarkdown(resolved.body) : []), [resolved?.body]);
   const approved = useMemo(
-    () => (resolved?.detail?.id ? approvedCommentsForPost(state, resolved.detail.id) : []),
-    [state, resolved?.detail?.id],
+    () => (resolved?.detail?.id ? approvedCommentsForPost(articleState, resolved.detail.id) : []),
+    [articleState, resolved?.detail?.id],
   );
-  const popular = useMemo(() => popularListItems(state, 4), [state]);
+  const popular = useMemo(() => popularListItems(articleState, 4), [articleState]);
 
   const {
     register,
@@ -138,12 +112,28 @@ export default function ArticlePage() {
     reset();
   });
 
-  if (!resolved || !article) {
+  if (!resolved || !article || !resolved.body.trim()) {
+    if (status === 'loading' || detailLoading || (resolved && !resolved.body.trim())) {
+      return (
+        <div className="bg-white min-h-screen px-4 py-8">
+          <div className="mx-auto max-w-[1120px] space-y-6" aria-hidden>
+            <div className="h-5 w-64 animate-pulse rounded bg-[#E5E7EB]" />
+            <div className="h-12 w-full max-w-3xl animate-pulse rounded bg-[#E5E7EB]" />
+            <div className="h-[420px] w-full animate-pulse rounded-lg bg-[#E5E7EB]" />
+            <div className="space-y-3">
+              <div className="h-4 w-full animate-pulse rounded bg-[#E5E7EB]" />
+              <div className="h-4 w-11/12 animate-pulse rounded bg-[#E5E7EB]" />
+              <div className="h-4 w-10/12 animate-pulse rounded bg-[#E5E7EB]" />
+            </div>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="bg-white min-h-screen flex items-center justify-center px-4">
         <div className="text-center max-w-md">
           <h1 className="text-2xl font-bold mb-2">Article not found</h1>
-          <p className="text-[#6B7280] mb-6">This URL does not match a published story from the Prisma API.</p>
+          <p className="text-[#6B7280] mb-6">This URL does not match a published Phulpur24 story.</p>
           <Link to="/" className="inline-flex items-center justify-center rounded-lg bg-[#194890] px-6 py-2 font-semibold text-white hover:bg-[#2656A8]">
             Back to home
           </Link>
@@ -165,12 +155,18 @@ export default function ArticlePage() {
             <Link to="/" className="inline-flex rounded-lg border border-[#E5E7EB] px-5 py-2 font-semibold hover:bg-[#F3F4F6]">
               Home
             </Link>
-            <Link
-              to={`/admin/posts/edit/${resolved.post.id}`}
-              className="inline-flex rounded-lg bg-[#194890] px-5 py-2 font-semibold text-white hover:bg-[#2656A8]"
-            >
-              Open in console
-            </Link>
+            {user ? (
+              <Link
+                to={`/admin/posts/edit/${resolved.post.id}`}
+                className="inline-flex rounded-lg bg-[#194890] px-5 py-2 font-semibold text-white hover:bg-[#2656A8]"
+              >
+                Open in console
+              </Link>
+            ) : (
+              <Link to="/login" className="inline-flex rounded-lg bg-[#194890] px-5 py-2 font-semibold text-white hover:bg-[#2656A8]">
+                Sign in to continue
+              </Link>
+            )}
           </div>
         </div>
       </div>
@@ -180,13 +176,13 @@ export default function ArticlePage() {
   const heroUrl = resolved.heroUrl;
   const authorProfile =
     resolved.post?.authorProfile ??
-    state.users.find((user) => user.name === article.author) ??
+    articleState.users.find((user) => user.name === article.author) ??
     null;
   const authorName = authorProfile?.name || article.author;
   const authorTitle = authorProfile?.title || 'Staff reporter';
   const authorBio =
     authorProfile?.bio ||
-    `Staff reporter for ${state.settings.siteTitle}. Coverage focuses on verification, primary sources, and clear context for readers.`;
+    `Staff reporter for ${articleState.settings.siteTitle}. Coverage focuses on verification, primary sources, and clear context for readers.`;
 
   return (
     <div className="bg-white min-h-screen">
@@ -313,7 +309,7 @@ export default function ArticlePage() {
                         <Facebook size={18} />
                       </a>
                     ) : null}
-                    <a href={`mailto:${authorProfile?.email || state.settings.contactEmail}`} className="text-[#6B7280] hover:text-[#194890]" aria-label={`Email ${authorName}`}>
+                    <a href={`mailto:${authorProfile?.email || articleState.settings.contactEmail}`} className="text-[#6B7280] hover:text-[#194890]" aria-label={`Email ${authorName}`}>
                       <Mail size={18} />
                     </a>
                   </div>

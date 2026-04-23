@@ -15,26 +15,15 @@ function formatToday(): string {
 
 export default function PublicLayout() {
   const { state, status } = useCms();
-  const { settings } = state;
+  const { settings, posts } = state;
 
-  if (status === 'loading') {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#F8FAFC] px-4 text-center">
-        <div>
-          <p className="text-sm font-semibold text-[#194890]">Loading publication</p>
-          <p className="mt-2 text-sm text-[#6B7280]">Connecting to the live Prisma API...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (status === 'offline') {
+  if (status === 'offline' && posts.length === 0) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#F8FAFC] px-4 text-center">
         <div className="max-w-md rounded-lg border border-[#E5E7EB] bg-white p-6 shadow-sm">
           <p className="text-lg font-bold text-[#111827]">API connection required</p>
           <p className="mt-2 text-sm leading-relaxed text-[#6B7280]">
-            The public site is configured to show live Prisma content only. Start the API and refresh this page.
+            The public site is configured to show live newsroom content only. Start the API and refresh this page.
           </p>
         </div>
       </div>

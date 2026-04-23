@@ -80,17 +80,21 @@ export async function writeAudit(input: {
   detail?: string;
   ip?: string;
 }): Promise<void> {
-  await prisma.auditLog.create({
-    data: {
-      actorId: input.actorId,
-      actorEmail: input.actorEmail,
-      action: input.action,
-      resource: input.resource,
-      resourceId: input.resourceId,
-      detail: input.detail,
-      ipHash: hashIp(input.ip),
-    },
-  });
+  try {
+    await prisma.auditLog.create({
+      data: {
+        actorId: input.actorId,
+        actorEmail: input.actorEmail,
+        action: input.action,
+        resource: input.resource,
+        resourceId: input.resourceId,
+        detail: input.detail,
+        ipHash: hashIp(input.ip),
+      },
+    });
+  } catch (error) {
+    console.warn('Audit log write failed:', error instanceof Error ? error.message : error);
+  }
 }
 
 export const idParamSchema = z.object({

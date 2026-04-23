@@ -40,3 +40,8 @@ saas-magagine*/
 # TypeScript/build cache
 *.tsbuildinfo
 .eslintcache
+
+# Local CI deploy keys
+.ci/gitlab_api_deploy
+.ci/gitlab_api_deploy.pub
+.ci/login.json

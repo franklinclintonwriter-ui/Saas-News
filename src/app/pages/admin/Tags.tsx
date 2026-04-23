@@ -1,7 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type MouseEvent } from 'react';
 import { Plus, Search, Edit, Trash2, Hash } from 'lucide-react';
 import { useCms } from '../../context/cms-context';
+import { useAuth } from '../../context/auth-context';
 import { slugify, tagUsageCount, type AdminTag } from '../../lib/admin/cms-state';
+import { hasMinimumRole } from '../../lib/admin/role-access';
 import { toast } from '../../lib/notify';
 import {
   Dialog,
@@ -24,6 +26,7 @@ import { Button } from '../../components/ui/button';
 
 export default function Tags() {
   const { state, dispatch } = useCms();
+  const { user } = useAuth();
   const [q, setQ] = useState('');
   const [sort, setSort] = useState<'name' | 'usage'>('usage');
   const [selected, setSelected] = useState<string[]>([]);
@@ -33,6 +36,7 @@ export default function Tags() {
   const [mergeOpen, setMergeOpen] = useState(false);
   const [mergeTarget, setMergeTarget] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const canDeleteOrMerge = hasMinimumRole(user?.role, 'EDITOR');
 
   const usage = (slug: string) => tagUsageCount(state.posts, slug);
 
@@ -56,7 +60,7 @@ export default function Tags() {
     setModalOpen(true);
   };
 
-  const openEdit = (e: React.MouseEvent, tag: AdminTag) => {
+  const openEdit = (e: MouseEvent, tag: AdminTag) => {
     e.stopPropagation();
     setEditing(tag);
     setForm({ name: tag.name, slug: tag.slug, color: tag.color });
@@ -91,6 +95,10 @@ export default function Tags() {
   };
 
   const runMerge = () => {
+    if (!canDeleteOrMerge) {
+      toast.error('Editor access is required to merge tags.');
+      return;
+    }
     if (selected.length < 2 || !mergeTarget) {
       toast.error('Pick at least two tags and a merge target.');
       return;
@@ -107,6 +115,11 @@ export default function Tags() {
   };
 
   const confirmDelete = () => {
+    if (!canDeleteOrMerge) {
+      toast.error('Editor access is required to delete tags.');
+      setDeleteId(null);
+      return;
+    }
     if (!deleteId) return;
     dispatch({ type: 'TAG_DELETE', id: deleteId });
     setSelected((s) => s.filter((id) => id !== deleteId));
@@ -122,6 +135,7 @@ export default function Tags() {
         <div>
           <h1 className="text-2xl md:text-3xl font-bold mb-2">Tags</h1>
           <p className="text-sm md:text-base text-[#6B7280]">Manage article tags and keywords</p>
+          {!canDeleteOrMerge ? <p className="mt-1 text-xs font-semibold text-[#92400E]">Delete and merge actions are editor-only</p> : null}
         </div>
         <Button onClick={openCreate} className="bg-[#194890] hover:bg-[#2656A8] font-semibold">
           <Plus size={20} className="mr-2" />
@@ -148,7 +162,7 @@ export default function Tags() {
               className="px-4 py-2 border border-[#E5E7EB] rounded-lg bg-white"
             >
               <option value="usage">Most used</option>
-              <option value="name">Name (A–Z)</option>
+              <option value="name">Name (A-Z)</option>
             </select>
           </div>
         </div>
@@ -160,22 +174,26 @@ export default function Tags() {
                 {selected.length} tag{selected.length > 1 ? 's' : ''} selected
               </span>
               <div className="flex flex-wrap gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => setMergeOpen(true)}>
-                  Merge…
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="border-[#FECACA] text-[#B91C1C] hover:bg-[#FEF2F2]"
-                  onClick={() => {
-                    selected.forEach((id) => dispatch({ type: 'TAG_DELETE', id }));
-                    toast.success(`Deleted ${selected.length} tag(s).`);
-                    setSelected([]);
-                  }}
-                >
-                  Delete
-                </Button>
+                {canDeleteOrMerge ? (
+                  <>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setMergeOpen(true)}>
+                      Merge...
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="border-[#FECACA] text-[#B91C1C] hover:bg-[#FEF2F2]"
+                      onClick={() => {
+                        selected.forEach((id) => dispatch({ type: 'TAG_DELETE', id }));
+                        toast.success(`Deleted ${selected.length} tag(s).`);
+                        setSelected([]);
+                      }}
+                    >
+                      Delete
+                    </Button>
+                  </>
+                ) : null}
                 <Button type="button" variant="ghost" size="sm" onClick={() => setSelected([])}>
                   Clear
                 </Button>
@@ -207,17 +225,19 @@ export default function Tags() {
                   >
                     <Edit size={12} />
                   </button>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDeleteId(tag.id);
-                    }}
-                    className="p-1 bg-white border border-[#DC2626] text-[#DC2626] rounded-full hover:bg-[#FEE2E2] transition"
-                    aria-label={`Delete ${tag.name}`}
-                  >
-                    <Trash2 size={12} />
-                  </button>
+                  {canDeleteOrMerge ? (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteId(tag.id);
+                      }}
+                      className="p-1 bg-white border border-[#DC2626] text-[#DC2626] rounded-full hover:bg-[#FEE2E2] transition"
+                      aria-label={`Delete ${tag.name}`}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  ) : null}
                 </div>
               </div>
             ))}
@@ -292,7 +312,7 @@ export default function Tags() {
               value={mergeTarget}
               onChange={(e) => setMergeTarget(e.target.value)}
             >
-              <option value="">Select…</option>
+              <option value="">Select...</option>
               {selected.map((id) => {
                 const t = state.tags.find((x) => x.id === id);
                 return t ? (

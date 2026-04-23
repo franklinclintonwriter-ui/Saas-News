@@ -7,6 +7,9 @@ export default function AboutPage() {
   const brand = state.settings.siteTitle || state.settings.organizationName || 'Publication';
   const page = state.pages.find((item) => item.slug === 'about' && item.status === 'PUBLISHED');
   if (page) return <StaticPageArticle page={page} fallbackTitle={`About ${brand}`} />;
+  const publishedCount = state.posts.filter((post) => post.status === 'Published').length;
+  const categoryCount = state.categories.length;
+  const staffCount = state.users.length;
 
   return (
     <div className="bg-white min-h-screen">
@@ -14,7 +17,7 @@ export default function AboutPage() {
         <div className="max-w-[1440px] mx-auto px-4 text-center">
           <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4">About {brand}</h1>
           <p className="text-base md:text-xl opacity-90 max-w-3xl mx-auto">
-            Your trusted source for breaking news, in-depth analysis, and compelling stories from around the world.
+            Verified local reporting, service journalism, and community updates for Phulpur, Mymensingh.
           </p>
         </div>
       </div>
@@ -25,18 +28,16 @@ export default function AboutPage() {
             <h2 className="text-2xl md:text-3xl font-bold mb-6">Our Story</h2>
             <div className="space-y-4 text-[#6B7280]">
               <p>
-                Founded from a simple belief, {brand} exists because everyone deserves access to accurate,
-                unbiased news coverage. In an era of information overload, we recognized the need for a platform
-                that cuts through the noise and delivers what matters most.
+                {brand} exists to make local information easier to verify, understand, and act on. We focus on
+                Phulpur and surrounding communities, where accurate updates can directly affect daily life.
               </p>
               <p>
-                Our team of dedicated journalists, editors, and analysts work around the clock to bring you
-                comprehensive coverage of global events, business developments, technological innovations, and
-                cultural trends. We're committed to upholding the highest standards of journalistic integrity.
+                Our newsroom workflow prioritizes primary sources, local voices, corrections, and clear context. The
+                goal is simple: publish useful reporting without noise or unnecessary distance from readers.
               </p>
               <p>
-                Today, {brand} gives readers the context
-                they need to stay informed and engaged with the world around them.
+                Today, {brand} gives readers a focused place to follow civic updates, infrastructure, education,
+                public services, culture, and community stories from Phulpur.
               </p>
             </div>
           </div>
@@ -47,10 +48,10 @@ export default function AboutPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
           {[
-            { icon: Users, title: 'Expert Team', description: '200+ journalists worldwide' },
-            { icon: Award, title: 'Award-Winning', description: '50+ journalism awards' },
-            { icon: Globe, title: 'Global Reach', description: 'Coverage in 150+ countries' },
-            { icon: Target, title: 'Accuracy First', description: '98% fact-check rating' },
+            { icon: Users, title: 'Local Team', description: `${staffCount || 'Verified'} newsroom profiles` },
+            { icon: Award, title: 'Public Interest', description: `${publishedCount} published local stories` },
+            { icon: Globe, title: 'Community Coverage', description: `${categoryCount} active coverage areas` },
+            { icon: Target, title: 'Accuracy First', description: 'Verification before publication' },
           ].map((stat, idx) => {
             const Icon = stat.icon;
             return (
@@ -68,9 +69,8 @@ export default function AboutPage() {
         <div className="bg-[#F3F4F6] rounded-lg p-8 md:p-12 mb-16">
           <h2 className="text-2xl md:text-3xl font-bold mb-6 text-center">Our Mission</h2>
           <p className="text-lg text-[#6B7280] text-center max-w-3xl mx-auto mb-8">
-            To empower readers with accurate, timely, and insightful journalism that helps them understand
-            and navigate our complex world. We believe that informed citizens are the foundation of a
-            healthy democracy.
+            To help Phulpur readers make better decisions with timely, verified, and clearly explained local
+            journalism. We believe community news is strongest when it is accountable to the people it serves.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-white p-6 rounded-lg">
@@ -88,7 +88,7 @@ export default function AboutPage() {
             <div className="bg-white p-6 rounded-lg">
               <h3 className="font-bold mb-3">Innovation</h3>
               <p className="text-sm text-[#6B7280]">
-                We embrace new technologies and storytelling methods to serve our readers better.
+                We use modern publishing tools to make local reporting faster, clearer, and easier to access.
               </p>
             </div>
           </div>
@@ -97,16 +97,11 @@ export default function AboutPage() {
         <div>
           <h2 className="text-2xl md:text-3xl font-bold mb-8 text-center">Leadership Team</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[
-              { name: 'Sarah Johnson', role: 'Editor-in-Chief' },
-              { name: 'Michael Chen', role: 'Managing Editor' },
-              { name: 'Emma Davis', role: 'Head of Investigative' },
-              { name: 'David Wilson', role: 'Technology Editor' },
-            ].map((member, idx) => (
+            {(state.users.length ? state.users.slice(0, 4) : [{ name: brand, title: 'Editorial Desk' }]).map((member, idx) => (
               <div key={idx} className="text-center">
                 <div className="w-32 h-32 bg-[#E5E7EB] rounded-full mx-auto mb-4" />
                 <h3 className="font-bold">{member.name}</h3>
-                <p className="text-sm text-[#6B7280]">{member.role}</p>
+                <p className="text-sm text-[#6B7280]">{'role' in member ? member.role : member.title}</p>
               </div>
             ))}
           </div>

@@ -1,0 +1,4 @@
+Options -Indexes
+
+RewriteEngine On
+RewriteRule ^$ /api/health [R=302,L]

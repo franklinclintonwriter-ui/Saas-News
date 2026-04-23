@@ -75,11 +75,15 @@ function publicUrl(id: string, key: string): string {
 }
 
 function parseImageDataUrl(dataUrl: string): { mime: string; buffer: Buffer } | null {
-  const match = /^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i.exec(dataUrl);
+  const match = /^data:(image\/[a-z0-9.+-]+)(?:;charset=[^;,]+)?(;base64)?,(.+)$/i.exec(dataUrl);
   if (!match) return null;
+  const encoded = match[3] ?? '';
+  const buffer = match[2]
+    ? Buffer.from(encoded, 'base64')
+    : Buffer.from(decodeURIComponent(encoded), 'utf8');
   return {
     mime: match[1]!,
-    buffer: Buffer.from(match[2]!, 'base64'),
+    buffer,
   };
 }
 

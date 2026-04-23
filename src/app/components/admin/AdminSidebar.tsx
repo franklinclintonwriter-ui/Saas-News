@@ -23,6 +23,14 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/auth-context';
 import { useCms } from '../../context/cms-context';
+import { hasMinimumRole, type AdminRole } from '../../lib/admin/role-access';
+
+type MenuItem = {
+  icon: typeof LayoutDashboard;
+  label: string;
+  path: string;
+  minRole?: AdminRole;
+};
 
 const menuSections = [
   {
@@ -47,7 +55,7 @@ const menuSections = [
     items: [
       { icon: MessageSquare, label: 'Comments', path: '/admin/comments' },
       { icon: Inbox, label: 'Contact Inbox', path: '/admin/contact' },
-      { icon: MailCheck, label: 'Newsletter', path: '/admin/newsletter' },
+      { icon: MailCheck, label: 'Newsletter', path: '/admin/newsletter', minRole: 'EDITOR' },
       { icon: Megaphone, label: 'Ads', path: '/admin/ads' },
     ],
   },
@@ -55,10 +63,10 @@ const menuSections = [
     title: 'Platform',
     items: [
       { icon: Navigation, label: 'Navigation', path: '/admin/navigation' },
-      { icon: Users, label: 'Users', path: '/admin/users' },
-      { icon: Settings, label: 'Settings', path: '/admin/settings' },
-      { icon: KeyRound, label: 'API Config', path: '/admin/api-config' },
-      { icon: ClipboardList, label: 'Audit Log', path: '/admin/audit-log' },
+      { icon: Users, label: 'Users', path: '/admin/users', minRole: 'ADMIN' },
+      { icon: Settings, label: 'Settings', path: '/admin/settings', minRole: 'ADMIN' },
+      { icon: KeyRound, label: 'API Config', path: '/admin/api-config', minRole: 'ADMIN' },
+      { icon: ClipboardList, label: 'Audit Log', path: '/admin/audit-log', minRole: 'ADMIN' },
     ],
   },
 ];
@@ -75,6 +83,7 @@ export default function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
   const { state } = useCms();
   const title = state.settings.siteTitle || state.settings.organizationName || 'Publication';
   const initials = (user?.email?.[0] || title[0] || 'P').toUpperCase();
+  const canUseApiConfig = hasMinimumRole(user?.role, 'ADMIN');
 
   return (
     <>
@@ -142,11 +151,16 @@ export default function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-4">
-          {menuSections.map((section) => (
+          {menuSections.map((section) => {
+            const sectionItems = section.items.filter((item: MenuItem) =>
+              item.minRole ? hasMinimumRole(user?.role, item.minRole) : true,
+            );
+            if (sectionItems.length === 0) return null;
+            return (
             <div key={section.title} className="mb-5 last:mb-0">
               <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{section.title}</p>
               <ul className="space-y-1">
-                {section.items.map((item) => {
+                {sectionItems.map((item) => {
                   const Icon = item.icon;
                   const isActive =
                     location.pathname === item.path ||
@@ -178,7 +192,8 @@ export default function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
                 })}
               </ul>
             </div>
-          ))}
+            );
+          })}
           <div className="mt-5 border-t border-white/10 pt-4">
             <Link
               to="/"
@@ -206,21 +221,25 @@ export default function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
             </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <Link
-              to="/admin/api-config"
-              onClick={onClose}
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-3 text-xs font-semibold text-slate-200 transition hover:bg-white/10"
-            >
-              <Sparkles size={15} aria-hidden />
-              AI Keys
-            </Link>
+            {canUseApiConfig ? (
+              <Link
+                to="/admin/api-config"
+                onClick={onClose}
+                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-3 text-xs font-semibold text-slate-200 transition hover:bg-white/10"
+              >
+                <Sparkles size={15} aria-hidden />
+                AI Keys
+              </Link>
+            ) : null}
             <button
               type="button"
               onClick={() => {
                 signOut();
                 navigate('/login', { replace: true });
               }}
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-3 text-xs font-semibold text-slate-200 transition hover:bg-white/10"
+              className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-3 text-xs font-semibold text-slate-200 transition hover:bg-white/10 ${
+                canUseApiConfig ? '' : 'col-span-2'
+              }`}
             >
               <LogOut size={15} aria-hidden />
               Sign out

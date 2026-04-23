@@ -2,6 +2,7 @@ import type { ArticleDetail, ArticleListItem } from './content/article-catalog';
 import type { AdminComment, AdminPost, CmsState } from './admin/cms-state';
 import { formatRelative } from './admin/cms-state';
 import { generatedPostImageDataUrl } from './generated-post-image';
+import { extractHeadingsFromMarkdown } from './markdown';
 
 export function publishedPosts(posts: AdminPost[]): AdminPost[] {
   return posts.filter((p) => p.status === 'Published');
@@ -141,17 +142,5 @@ export function escapeHtml(s: string): string {
 export type TocItem = { id: string; label: string };
 
 export function extractTocFromMarkdown(content: string): TocItem[] {
-  const items: TocItem[] = [];
-  const re = /^##\s+(.+)$/gm;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(content)) !== null) {
-    const label = m[1]!.trim();
-    const id = label
-      .toLowerCase()
-      .replace(/[^\w\s-]/g, '')
-      .trim()
-      .replace(/\s+/g, '-');
-    if (id) items.push({ id, label });
-  }
-  return items;
+  return extractHeadingsFromMarkdown(content, [2]).map(({ id, label }) => ({ id, label }));
 }

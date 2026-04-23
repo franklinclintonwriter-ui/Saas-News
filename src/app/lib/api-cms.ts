@@ -20,7 +20,7 @@ import type {
   UserStatus,
 } from './admin/cms-state';
 import { createEmptyCmsState } from './admin/cms-state';
-import { apiRequest, apiRequestWithMeta } from './api-client';
+import { ApiClientError, apiRequest } from './api-client';
 
 type ApiCategory = AdminCategory & { _count?: { posts: number }; createdAt?: string; updatedAt?: string };
 type ApiTag = AdminTag & { _count?: { posts: number }; createdAt?: string; updatedAt?: string };
@@ -70,7 +70,7 @@ type ApiPost = {
   title: string;
   slug: string;
   excerpt: string;
-  content: string;
+  content?: string;
   status: string;
   featured: boolean;
   breaking: boolean;
@@ -102,6 +102,28 @@ type ApiPost = {
   featuredImage?: ApiMedia | null;
   tags?: ApiTag[];
   comments?: ApiComment[];
+};
+
+type AdminBootstrap = {
+  mode?: 'core' | 'full';
+  posts: ApiPost[];
+  categories: ApiCategory[];
+  tags: ApiTag[];
+  media: ApiMedia[];
+  comments: ApiComment[];
+  users: ApiUser[];
+  settings: SiteSettings;
+  audit: ApiAudit[];
+  pages: ApiStaticPage[];
+  contactMessages: ApiContactMessage[];
+  newsletterSubscribers: ApiNewsletterSubscriber[];
+  ads: ApiAdPlacement[];
+  navigation: ApiNavigationItem[];
+  analyticsSnapshots: ApiAnalyticsSnapshot[];
+};
+
+type FetchCmsStateOptions = {
+  mode?: 'core' | 'full';
 };
 
 const roleToUi: Record<string, UserRole> = {
@@ -163,13 +185,20 @@ function iso(value: string | Date | null | undefined): string | null {
   return new Date(value).toISOString();
 }
 
+export function isExpiredAuthError(error: unknown): boolean {
+  if (error instanceof ApiClientError) {
+    return error.status === 401 && /expired|unauthorized|authentication|invalid access token/i.test(error.message);
+  }
+  return error instanceof Error && /access token expired/i.test(error.message);
+}
+
 export function mapApiPost(post: ApiPost): AdminPost {
   return {
     id: post.id,
     title: post.title,
     slug: post.slug,
     excerpt: post.excerpt,
-    content: post.content,
+    content: post.content ?? '',
     author: post.author?.name ?? 'Editor',
     authorProfile: post.author
       ? {
@@ -202,6 +231,24 @@ export function mapApiPost(post: ApiPost): AdminPost {
     updatedAt: iso(post.updatedAt) ?? new Date().toISOString(),
     publishedAt: iso(post.publishedAt),
   };
+}
+
+export async function fetchPublicPostDetail(idOrSlug: string): Promise<{
+  post: AdminPost;
+  media: AdminMedia[];
+  comments: AdminComment[];
+}> {
+  const post = await apiRequest<ApiPost>(`/public/posts/${encodeURIComponent(idOrSlug)}`);
+  return {
+    post: mapApiPost(post),
+    media: post.featuredImage ? [mapApiMedia(post.featuredImage)] : [],
+    comments: post.comments?.map(mapApiComment) ?? [],
+  };
+}
+
+export async function fetchAdminPostDetail(id: string, token: string): Promise<AdminPost> {
+  const post = await apiRequest<ApiPost>(`/admin/posts/${encodeURIComponent(id)}`, { token });
+  return mapApiPost(post);
 }
 
 function mapApiMedia(media: ApiMedia): AdminMedia {
@@ -305,96 +352,90 @@ function settingsPayload(settings: SiteSettings): SiteSettings {
   return settings;
 }
 
-export async function fetchCmsState(token?: string | null): Promise<CmsState> {
+export async function saveAdminSettings(settings: SiteSettings, token: string): Promise<SiteSettings> {
+  return apiRequest<SiteSettings>('/admin/settings', {
+    method: 'PUT',
+    token,
+    body: JSON.stringify(settingsPayload(settings)),
+  });
+}
+
+export async function fetchCmsState(token?: string | null, options: FetchCmsStateOptions = {}): Promise<CmsState> {
   const defaults = createEmptyCmsState();
+
+  if (token) {
+    const mode = options.mode === 'core' ? 'core' : 'full';
+    const boot = await apiRequest<AdminBootstrap>(mode === 'core' ? '/admin/bootstrap?mode=core' : '/admin/bootstrap', { token });
+    return {
+      ...defaults,
+      settings: { ...defaults.settings, ...boot.settings },
+      categories: boot.categories.map(({ _count, createdAt, updatedAt, ...category }) => category),
+      tags: boot.tags.map(({ _count, createdAt, updatedAt, ...tag }) => tag),
+      posts: boot.posts.map(mapApiPost),
+      media: boot.media.map(mapApiMedia),
+      comments: boot.comments.map(mapApiComment),
+      users: boot.users.map(mapApiUser),
+      auditLog: boot.audit.map(mapApiAudit),
+      pages: boot.pages.map((page) => ({
+        ...page,
+        createdAt: iso(page.createdAt) ?? new Date().toISOString(),
+        updatedAt: iso(page.updatedAt) ?? new Date().toISOString(),
+      })),
+      contactMessages: boot.contactMessages.map((message) => ({
+        ...message,
+        createdAt: iso(message.createdAt) ?? new Date().toISOString(),
+        updatedAt: iso(message.updatedAt) ?? new Date().toISOString(),
+        resolvedAt: iso(message.resolvedAt),
+      })),
+      newsletterSubscribers: boot.newsletterSubscribers.map((subscriber) => ({
+        ...subscriber,
+        createdAt: iso(subscriber.createdAt) ?? new Date().toISOString(),
+        updatedAt: iso(subscriber.updatedAt) ?? new Date().toISOString(),
+      })),
+      ads: boot.ads.map((ad) => ({
+        ...ad,
+        startsAt: iso(ad.startsAt),
+        endsAt: iso(ad.endsAt),
+      })),
+      navigation: boot.navigation,
+      analyticsSnapshots: boot.analyticsSnapshots.map((snapshot) => ({
+        ...snapshot,
+        date: iso(snapshot.date) ?? new Date().toISOString(),
+      })),
+    };
+  }
+
   const [settings, categories, tags, publicPosts, pages, ads, navigation] = await Promise.all([
     apiRequest<SiteSettings>('/public/settings'),
     apiRequest<ApiCategory[]>('/public/categories'),
     apiRequest<ApiTag[]>('/public/tags'),
-    apiRequest<ApiPost[]>('/public/posts?limit=100'),
+    apiRequest<ApiPost[]>('/public/posts?limit=100&summary=true'),
     apiRequest<ApiStaticPage[]>('/public/pages').catch(() => []),
     apiRequest<ApiAdPlacement[]>('/public/ads').catch(() => []),
     apiRequest<ApiNavigationItem[]>('/public/navigation').catch(() => []),
   ]);
 
-  if (!token) {
-    const media = uniqueById(publicPosts.flatMap((post) => (post.featuredImage ? [mapApiMedia(post.featuredImage)] : [])));
-    return {
-      ...defaults,
-      settings: { ...defaults.settings, ...settings },
-      categories: categories.map(({ _count, createdAt, updatedAt, ...category }) => category),
-      tags: tags.map(({ _count, createdAt, updatedAt, ...tag }) => tag),
-      posts: publicPosts.map(mapApiPost),
-      media,
-      comments: publicPosts.flatMap((post) => post.comments?.map(mapApiComment) ?? []),
-      users: defaults.users,
-      auditLog: [],
-      pages: pages.map((page) => ({
-        ...page,
-        createdAt: iso(page.createdAt) ?? new Date().toISOString(),
-        updatedAt: iso(page.updatedAt) ?? new Date().toISOString(),
-      })),
-      contactMessages: [],
-      newsletterSubscribers: [],
-      ads,
-      navigation,
-      analyticsSnapshots: [],
-    };
-  }
-
-  const [adminPosts, adminCategories, adminTags, media, comments, users, adminSettings, audit, adminPages, contactMessages, newsletterSubscribers, adminAds, adminNavigation, analyticsSnapshots] = await Promise.all([
-    apiRequestWithMeta<ApiPost[]>('/admin/posts?limit=100', { token }).then((r) => r.data),
-    apiRequest<ApiCategory[]>('/admin/categories', { token }),
-    apiRequest<ApiTag[]>('/admin/tags', { token }),
-    apiRequest<ApiMedia[]>('/admin/media', { token }),
-    apiRequestWithMeta<ApiComment[]>('/admin/comments?limit=100', { token }).then((r) => r.data),
-    apiRequest<ApiUser[]>('/admin/users', { token }).catch(() => []),
-    apiRequest<SiteSettings>('/admin/settings', { token }).catch(() => settings),
-    apiRequestWithMeta<ApiAudit[]>('/admin/audit-log?limit=100', { token }).then((r) => r.data).catch(() => []),
-    apiRequest<ApiStaticPage[]>('/admin/pages', { token }).catch(() => pages),
-    apiRequestWithMeta<ApiContactMessage[]>('/admin/contact-messages?limit=100', { token }).then((r) => r.data).catch(() => []),
-    apiRequestWithMeta<ApiNewsletterSubscriber[]>('/admin/newsletter/subscribers?limit=100', { token }).then((r) => r.data).catch(() => []),
-    apiRequest<ApiAdPlacement[]>('/admin/ads', { token }).catch(() => ads),
-    apiRequest<ApiNavigationItem[]>('/admin/navigation', { token }).catch(() => navigation),
-    apiRequest<ApiAnalyticsSnapshot[]>('/admin/analytics/snapshots', { token }).catch(() => []),
-  ]);
-
+  const media = uniqueById(publicPosts.flatMap((post) => (post.featuredImage ? [mapApiMedia(post.featuredImage)] : [])));
   return {
     ...defaults,
-    settings: { ...defaults.settings, ...adminSettings },
-    categories: adminCategories.map(({ _count, createdAt, updatedAt, ...category }) => category),
-    tags: adminTags.map(({ _count, createdAt, updatedAt, ...tag }) => tag),
-    posts: adminPosts.map(mapApiPost),
-    media: media.map(mapApiMedia),
-    comments: comments.map(mapApiComment),
-    users: users.map(mapApiUser),
-    auditLog: audit.map(mapApiAudit),
-    pages: adminPages.map((page) => ({
+    settings: { ...defaults.settings, ...settings },
+    categories: categories.map(({ _count, createdAt, updatedAt, ...category }) => category),
+    tags: tags.map(({ _count, createdAt, updatedAt, ...tag }) => tag),
+    posts: publicPosts.map(mapApiPost),
+    media,
+    comments: publicPosts.flatMap((post) => post.comments?.map(mapApiComment) ?? []),
+    users: defaults.users,
+    auditLog: [],
+    pages: pages.map((page) => ({
       ...page,
       createdAt: iso(page.createdAt) ?? new Date().toISOString(),
       updatedAt: iso(page.updatedAt) ?? new Date().toISOString(),
     })),
-    contactMessages: contactMessages.map((message) => ({
-      ...message,
-      createdAt: iso(message.createdAt) ?? new Date().toISOString(),
-      updatedAt: iso(message.updatedAt) ?? new Date().toISOString(),
-      resolvedAt: iso(message.resolvedAt),
-    })),
-    newsletterSubscribers: newsletterSubscribers.map((subscriber) => ({
-      ...subscriber,
-      createdAt: iso(subscriber.createdAt) ?? new Date().toISOString(),
-      updatedAt: iso(subscriber.updatedAt) ?? new Date().toISOString(),
-    })),
-    ads: adminAds.map((ad) => ({
-      ...ad,
-      startsAt: iso(ad.startsAt),
-      endsAt: iso(ad.endsAt),
-    })),
-    navigation: adminNavigation,
-    analyticsSnapshots: analyticsSnapshots.map((snapshot) => ({
-      ...snapshot,
-      date: iso(snapshot.date) ?? new Date().toISOString(),
-    })),
+    contactMessages: [],
+    newsletterSubscribers: [],
+    ads,
+    navigation,
+    analyticsSnapshots: [],
   };
 }
 
@@ -578,7 +619,7 @@ export async function syncCmsAction(action: CmsAction, token: string | null | un
       await apiRequest(`/admin/analytics/snapshots/${action.id}`, { method: 'DELETE', token });
       return;
     case 'SETTINGS_SET':
-      await apiRequest('/admin/settings', { method: 'PUT', token, body: JSON.stringify(settingsPayload(action.settings)) });
+      await saveAdminSettings(action.settings, token);
       return;
     default:
       return;

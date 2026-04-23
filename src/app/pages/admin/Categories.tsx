@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Plus, Search, Edit, Trash2, FolderOpen } from 'lucide-react';
 import { useCms } from '../../context/cms-context';
+import { useAuth } from '../../context/auth-context';
 import { categoryPostCount, slugify, type AdminCategory } from '../../lib/admin/cms-state';
+import { hasMinimumRole } from '../../lib/admin/role-access';
 import { toast } from '../../lib/notify';
 import {
   Dialog,
@@ -24,11 +26,13 @@ import { Button } from '../../components/ui/button';
 
 export default function Categories() {
   const { state, dispatch } = useCms();
+  const { user } = useAuth();
   const [q, setQ] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<AdminCategory | null>(null);
   const [form, setForm] = useState({ name: '', slug: '', description: '', color: '#2563EB' });
   const [deleteTarget, setDeleteTarget] = useState<AdminCategory | null>(null);
+  const canManage = hasMinimumRole(user?.role, 'EDITOR');
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -51,6 +55,10 @@ export default function Categories() {
   };
 
   const submit = () => {
+    if (!canManage) {
+      toast.error('Editor access is required to modify categories.');
+      return;
+    }
     if (!form.name.trim()) {
       toast.error('Category name is required.');
       return;
@@ -84,6 +92,11 @@ export default function Categories() {
   };
 
   const confirmDelete = () => {
+    if (!canManage) {
+      toast.error('Editor access is required to delete categories.');
+      setDeleteTarget(null);
+      return;
+    }
     if (!deleteTarget) return;
     const count = categoryPostCount(state.posts, deleteTarget.slug);
     if (count > 0) {
@@ -102,8 +115,9 @@ export default function Categories() {
         <div>
           <h1 className="text-2xl md:text-3xl font-bold mb-2">Categories</h1>
           <p className="text-sm md:text-base text-[#6B7280]">Organize your content into categories</p>
+          {!canManage ? <p className="mt-1 text-xs font-semibold text-[#92400E]">Read-only for your role</p> : null}
         </div>
-        <Button onClick={openCreate} className="bg-[#194890] hover:bg-[#2656A8] font-semibold">
+        <Button onClick={openCreate} disabled={!canManage} className="bg-[#194890] hover:bg-[#2656A8] font-semibold disabled:opacity-50">
           <Plus size={20} className="mr-2" />
           New Category
         </Button>
@@ -137,22 +151,26 @@ export default function Categories() {
                     <FolderOpen className="text-white" size={24} />
                   </div>
                   <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => openEdit(category)}
-                      className="p-2 hover:bg-[#F3F4F6] rounded-lg transition"
-                      aria-label={`Edit ${category.name}`}
-                    >
-                      <Edit size={16} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDeleteTarget(category)}
-                      className="p-2 hover:bg-[#FEE2E2] text-[#DC2626] rounded-lg transition"
-                      aria-label={`Delete ${category.name}`}
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    {canManage ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => openEdit(category)}
+                          className="p-2 hover:bg-[#F3F4F6] rounded-lg transition"
+                          aria-label={`Edit ${category.name}`}
+                        >
+                          <Edit size={16} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteTarget(category)}
+                          className="p-2 hover:bg-[#FEE2E2] text-[#DC2626] rounded-lg transition"
+                          aria-label={`Delete ${category.name}`}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </>
+                    ) : null}
                   </div>
                 </div>
 

@@ -18,28 +18,12 @@ import {
   AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
 
-const trafficData = [
-  { date: 'Jan 1', views: 45000, visitors: 32000, sessions: 28000 },
-  { date: 'Jan 8', views: 52000, visitors: 38000, sessions: 33000 },
-  { date: 'Jan 15', views: 61000, visitors: 45000, sessions: 39000 },
-  { date: 'Jan 22', views: 58000, visitors: 42000, sessions: 37000 },
-  { date: 'Jan 29', views: 70000, visitors: 51000, sessions: 44000 },
-  { date: 'Feb 5', views: 82000, visitors: 59000, sessions: 51000 },
-  { date: 'Feb 12', views: 78000, visitors: 56000, sessions: 48000 },
-];
-
-const trafficSources = [
-  { name: 'Direct', value: 35, color: '#194890' },
-  { name: 'Search', value: 28, color: '#2563EB' },
-  { name: 'Social', value: 22, color: '#EC4899' },
-  { name: 'Referral', value: 15, color: '#F59E0B' },
-];
-
-const deviceData = [
-  { device: 'Desktop', users: 52000 },
-  { device: 'Mobile', users: 38000 },
-  { device: 'Tablet', users: 12000 },
-];
+const trafficSourceColors = {
+  Direct: '#194890',
+  Search: '#2563EB',
+  Social: '#EC4899',
+  Referral: '#F59E0B',
+};
 
 type SnapshotForm = Omit<AnalyticsSnapshot, 'id' | 'date'> & { date: string };
 
@@ -85,7 +69,7 @@ export default function Analytics() {
           id: p.id,
           title: p.title,
           views: p.views,
-          growth: 15 - i * 3.2,
+          rank: i + 1,
         })),
     [state.posts],
   );
@@ -98,7 +82,6 @@ export default function Analytics() {
   }, [state.posts]);
 
   const liveTrafficData = useMemo(() => {
-    if (!state.analyticsSnapshots.length) return trafficData;
     return state.analyticsSnapshots.map((row) => ({
       date: new Date(row.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
       views: row.views,
@@ -109,18 +92,18 @@ export default function Analytics() {
 
   const liveTrafficSources = useMemo(() => {
     const latest = state.analyticsSnapshots.at(-1);
-    if (!latest) return trafficSources;
+    if (!latest) return [];
     return [
-      { name: 'Direct', value: latest.direct, color: '#194890' },
-      { name: 'Search', value: latest.search, color: '#2563EB' },
-      { name: 'Social', value: latest.social, color: '#EC4899' },
-      { name: 'Referral', value: latest.referral, color: '#F59E0B' },
+      { name: 'Direct', value: latest.direct, color: trafficSourceColors.Direct },
+      { name: 'Search', value: latest.search, color: trafficSourceColors.Search },
+      { name: 'Social', value: latest.social, color: trafficSourceColors.Social },
+      { name: 'Referral', value: latest.referral, color: trafficSourceColors.Referral },
     ];
   }, [state.analyticsSnapshots]);
 
   const liveDeviceData = useMemo(() => {
     const latest = state.analyticsSnapshots.at(-1);
-    if (!latest) return deviceData;
+    if (!latest) return [];
     return [
       { device: 'Desktop', users: latest.desktopUsers },
       { device: 'Mobile', users: latest.mobileUsers },
@@ -191,7 +174,7 @@ export default function Analytics() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8">
         {[
-          { label: 'Total Views (workspace)', value: totals.fmt(totals.views), change: 'Σ posts', icon: Eye, positive: true },
+          { label: 'Total Views (workspace)', value: totals.fmt(totals.views), change: 'from posts', icon: Eye, positive: true },
           { label: 'Published posts', value: String(totals.published), change: 'catalog', icon: Users, positive: true },
           { label: 'Avg. Load', value: avgLoadLabel, change: latestSnapshot ? 'latest snapshot' : 'no snapshot', icon: Clock, positive: Boolean(latestSnapshot && latestSnapshot.avgLoadMs <= 1600) },
           { label: 'Growth Rate', value: growthLabel, change: previousSnapshot ? 'vs previous' : 'needs 2 snapshots', icon: TrendingUp, positive: growthRate === null || growthRate >= 0 },
@@ -218,56 +201,74 @@ export default function Analytics() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
         <div className="lg:col-span-2 bg-white rounded-lg p-4 md:p-6 border border-[#E5E7EB]">
           <h2 className="text-lg md:text-xl font-bold mb-4">Traffic Overview</h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={liveTrafficData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Line type="monotone" dataKey="views" stroke="#194890" strokeWidth={2} name="Page Views" />
-              <Line type="monotone" dataKey="visitors" stroke="#2563EB" strokeWidth={2} name="Visitors" />
-              <Line type="monotone" dataKey="sessions" stroke="#F59E0B" strokeWidth={2} name="Sessions" />
-            </LineChart>
-          </ResponsiveContainer>
+          {liveTrafficData.length === 0 ? (
+            <div className="flex h-[300px] items-center justify-center rounded-lg border border-dashed border-[#CBD5E1] bg-[#F8FAFC] text-sm text-[#64748B]">
+              Add analytics snapshots to populate this chart.
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={liveTrafficData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Line type="monotone" dataKey="views" stroke="#194890" strokeWidth={2} name="Page Views" />
+                <Line type="monotone" dataKey="visitors" stroke="#2563EB" strokeWidth={2} name="Visitors" />
+                <Line type="monotone" dataKey="sessions" stroke="#F59E0B" strokeWidth={2} name="Sessions" />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
         </div>
 
         <div className="bg-white rounded-lg p-4 md:p-6 border border-[#E5E7EB]">
           <h2 className="text-lg md:text-xl font-bold mb-4">Traffic Sources</h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={liveTrafficSources}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, value }) => `${name}: ${value}%`}
-                outerRadius={80}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {liveTrafficSources.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
+          {liveTrafficSources.length === 0 ? (
+            <div className="flex h-[300px] items-center justify-center rounded-lg border border-dashed border-[#CBD5E1] bg-[#F8FAFC] text-sm text-[#64748B]">
+              No traffic source snapshot yet.
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={liveTrafficSources}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, value }) => `${name}: ${value}%`}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {liveTrafficSources.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 mb-6 md:mb-8">
         <div className="bg-white rounded-lg p-4 md:p-6 border border-[#E5E7EB]">
           <h2 className="text-lg md:text-xl font-bold mb-4">Device Distribution</h2>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={liveDeviceData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="device" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="users" fill="#194890" />
-            </BarChart>
-          </ResponsiveContainer>
+          {liveDeviceData.length === 0 ? (
+            <div className="flex h-[250px] items-center justify-center rounded-lg border border-dashed border-[#CBD5E1] bg-[#F8FAFC] text-sm text-[#64748B]">
+              No device snapshot yet.
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={liveDeviceData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="device" />
+                <YAxis />
+                <Tooltip />
+                <Bar dataKey="users" fill="#194890" />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
 
         <div className="bg-white rounded-lg p-4 md:p-6 border border-[#E5E7EB]">
@@ -284,10 +285,7 @@ export default function Analytics() {
                     </Link>
                     <p className="text-xs text-[#6B7280] mt-1">{article.views.toLocaleString()} views</p>
                   </div>
-                  <span className={`flex items-center gap-1 text-sm font-semibold ml-3 ${article.growth > 0 ? 'text-[#10B981]' : 'text-[#DC2626]'}`}>
-                    {article.growth > 0 ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
-                    {Math.abs(article.growth).toFixed(1)}%
-                  </span>
+                  <span className="ml-3 rounded-md bg-[#F1F5F9] px-2 py-1 text-xs font-semibold text-[#475569]">#{article.rank}</span>
                 </div>
               ))
             )}
@@ -319,7 +317,7 @@ export default function Analytics() {
         <div className="mb-4 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
           <div>
             <h2 className="text-lg font-bold md:text-xl">Analytics Snapshots</h2>
-            <p className="text-sm text-[#6B7280]">Maintain the Prisma data series used by dashboard and analytics charts.</p>
+            <p className="text-sm text-[#6B7280]">Maintain the live data series used by dashboard and analytics charts.</p>
           </div>
           <Button type="button" onClick={openCreate} className="bg-[#194890] hover:bg-[#2656A8]">
             <Plus size={18} className="mr-2" />

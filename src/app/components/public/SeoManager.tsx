@@ -4,6 +4,10 @@ import { useCms } from '../../context/cms-context';
 import type { SiteSettings } from '../../lib/admin/cms-state';
 import { categoryLabelForSlug, resolveArticle } from '../../lib/public-content';
 
+const FALLBACK_FAVICON = '/favicon.svg';
+const FALLBACK_KEYWORDS = 'Phulpur news, Mymensingh updates, Bangladesh local news, verified journalism, Phulpur24';
+const GOOGLE_SITE_VERIFICATION_FALLBACK = 'Scecq8dllrg_egJpIykwEbTZbz2ymYg9JO_eC6NwFOA';
+
 function trimSlash(value: string): string {
   return value.replace(/\/+$/, '');
 }
@@ -24,6 +28,11 @@ function setMeta(selector: string, createAttrs: Record<string, string>, content:
   node.setAttribute('content', content);
 }
 
+function removeMeta(selector: string): void {
+  const node = document.head.querySelector<HTMLMetaElement>(selector);
+  node?.remove();
+}
+
 function setLink(selector: string, rel: string, href: string): void {
   let node = document.head.querySelector<HTMLLinkElement>(selector);
   if (!href) {
@@ -38,10 +47,57 @@ function setLink(selector: string, rel: string, href: string): void {
   node.setAttribute('href', href);
 }
 
+function normalizeMetaText(value: string | undefined, fallback = ''): string {
+  return value?.trim() || fallback;
+}
+
 function normalizeTwitterHandle(value: string): string {
   const handle = value.trim();
   if (!handle) return '';
   return handle.startsWith('@') ? handle : `@${handle}`;
+}
+
+function resolveFaviconUrl(settings: SiteSettings): string {
+  return normalizeMetaText(settings.faviconUrl) || FALLBACK_FAVICON;
+}
+
+function setIconLinks(rawHref: string): void {
+  const href = normalizeMetaText(rawHref, FALLBACK_FAVICON);
+  const dataMime = href.match(/^data:(image\/[a-z0-9.+-]+)/i)?.[1];
+  const lowerHref = href.toLowerCase();
+  const type = dataMime
+    ? dataMime
+    : lowerHref.endsWith('.png')
+      ? 'image/png'
+      : lowerHref.endsWith('.jpg') || lowerHref.endsWith('.jpeg')
+        ? 'image/jpeg'
+        : 'image/svg+xml';
+
+  let icon = document.head.querySelector<HTMLLinkElement>('link[rel="icon"]');
+  if (!icon) {
+    icon = document.createElement('link');
+    icon.setAttribute('rel', 'icon');
+    document.head.appendChild(icon);
+  }
+  icon.setAttribute('href', href);
+  icon.setAttribute('type', type);
+
+  let shortcut = document.head.querySelector<HTMLLinkElement>('link[rel="shortcut icon"]');
+  if (!shortcut) {
+    shortcut = document.createElement('link');
+    shortcut.setAttribute('rel', 'shortcut icon');
+    document.head.appendChild(shortcut);
+  }
+  shortcut.setAttribute('href', href);
+
+  let apple = document.head.querySelector<HTMLLinkElement>('link[rel="apple-touch-icon"]');
+  if (!apple) {
+    apple = document.createElement('link');
+    apple.setAttribute('rel', 'apple-touch-icon');
+    apple.setAttribute('sizes', '180x180');
+    document.head.appendChild(apple);
+  }
+  apple.setAttribute('href', href);
 }
 
 export default function SeoManager() {
@@ -54,25 +110,33 @@ export default function SeoManager() {
     const canonical = `${base}${location.pathname === '/' ? '/' : location.pathname}`;
     const siteTitle = settings.siteTitle || settings.organizationName || 'Publication';
     let title = settings.defaultSeoTitle || `${siteTitle} - ${settings.tagline}`;
-    let description = settings.defaultMetaDescription || settings.tagline;
+    let description = normalizeMetaText(settings.defaultMetaDescription, settings.tagline);
     let image = settings.ogImageUrl || settings.logoUrl || '';
     let type = 'website';
     let jsonLd: Record<string, unknown> | null = null;
+    let articlePublished = '';
+    let articleModified = '';
+    let articleSection = '';
+    let articleImage = '';
 
     const articleMatch = location.pathname.match(/^\/article\/([^/?#]+)/);
     if (articleMatch?.[1]) {
       const resolved = resolveArticle(state, decodeURIComponent(articleMatch[1]));
       if (resolved?.detail) {
         title = `${resolved.detail.title} | ${siteTitle}`;
-        description = resolved.detail.dek || description;
+        description = normalizeMetaText(resolved.detail.dek, description);
         image = resolved.heroUrl || image;
         type = 'article';
+        articleImage = image;
+        articlePublished = resolved.post?.publishedAt || '';
+        articleModified = resolved.post?.updatedAt || '';
+        articleSection = categoryLabelForSlug(state, resolved.post?.categorySlug || '');
         jsonLd = {
           '@context': 'https://schema.org',
           '@type': 'NewsArticle',
           headline: resolved.detail.title,
           description,
-          image: image ? [image] : undefined,
+          image: articleImage ? [articleImage] : undefined,
           datePublished: resolved.post?.publishedAt,
           dateModified: resolved.post?.updatedAt,
           author: { '@type': 'Person', name: resolved.detail.author },
@@ -92,7 +156,7 @@ export default function SeoManager() {
         description = `Latest ${label.toLowerCase()} news, analysis, and updates from ${siteTitle}.`;
       } else if (location.pathname === '/search') {
         title = `Search ${siteTitle}`;
-        description = `Search articles, topics, and analysis from ${siteTitle}.`;
+        description = `Search articles, topics, analysis, and updates from ${siteTitle}.`;
       } else if (location.pathname === '/about') {
         const page = state.pages.find((item) => item.slug === 'about');
         title = page?.seoTitle || `About ${siteTitle}`;
@@ -143,6 +207,11 @@ export default function SeoManager() {
       image,
       canonical,
       type,
+      articlePublished,
+      articleModified,
+      articleSection,
+      articleImage,
+      keywordText: normalizeMetaText(settings.defaultKeywords, FALLBACK_KEYWORDS),
       jsonLd: jsonLd ?? organizationJsonLd,
     };
   }, [location.pathname, settings, state]);
@@ -155,16 +224,15 @@ export default function SeoManager() {
     document.documentElement.style.setProperty('--phulpur24-footer-bg', settings.footerBackground);
 
     setMeta('meta[name="description"]', { name: 'description' }, page.description);
-    setMeta('meta[name="keywords"]', { name: 'keywords' }, settings.defaultKeywords);
+    setMeta('meta[name="keywords"]', { name: 'keywords' }, page.keywordText);
     setMeta('meta[name="robots"]', { name: 'robots' }, `${settings.robotsIndex ? 'index' : 'noindex'}, ${settings.robotsFollow ? 'follow' : 'nofollow'}`);
     setMeta('meta[name="theme-color"]', { name: 'theme-color' }, settings.primaryColor);
     setMeta('meta[name="application-name"]', { name: 'application-name' }, settings.siteTitle);
+    setMeta('meta[name="msapplication-TileColor"]', { name: 'msapplication-TileColor' }, settings.primaryColor);
+    setMeta('meta[name="apple-mobile-web-app-title"]', { name: 'apple-mobile-web-app-title' }, settings.siteTitle);
 
-    if (settings.googleSiteVerification) {
-      setMeta('meta[name="google-site-verification"]', { name: 'google-site-verification' }, settings.googleSiteVerification);
-    } else {
-      document.head.querySelector('meta[name="google-site-verification"]')?.remove();
-    }
+    const googleVerification = settings.googleSiteVerification.trim() || GOOGLE_SITE_VERIFICATION_FALLBACK;
+    setMeta('meta[name="google-site-verification"]', { name: 'google-site-verification' }, googleVerification);
     if (settings.bingSiteVerification) {
       setMeta('meta[name="msvalidate.01"]', { name: 'msvalidate.01' }, settings.bingSiteVerification);
     } else {
@@ -172,22 +240,41 @@ export default function SeoManager() {
     }
 
     setLink('link[rel="canonical"]', 'canonical', page.canonical);
-    setLink('link[rel="icon"]', 'icon', settings.faviconUrl || settings.logoUrl);
-    setLink('link[rel="apple-touch-icon"]', 'apple-touch-icon', settings.faviconUrl || settings.logoUrl);
+    setIconLinks(ensureFaviconUrl(settings));
 
     setMeta('meta[property="og:site_name"]', { property: 'og:site_name' }, settings.siteTitle);
     setMeta('meta[property="og:type"]', { property: 'og:type' }, page.type);
     setMeta('meta[property="og:title"]', { property: 'og:title' }, page.title);
     setMeta('meta[property="og:description"]', { property: 'og:description' }, page.description);
     setMeta('meta[property="og:url"]', { property: 'og:url' }, page.canonical);
+    setMeta('meta[property="og:locale"]', { property: 'og:locale' }, 'en_US');
     if (page.image) setMeta('meta[property="og:image"]', { property: 'og:image' }, page.image);
+    if (page.image) setMeta('meta[property="og:image:alt"]', { property: 'og:image:alt' }, page.title);
 
     setMeta('meta[name="twitter:card"]', { name: 'twitter:card' }, page.image ? 'summary_large_image' : 'summary');
     setMeta('meta[name="twitter:title"]', { name: 'twitter:title' }, page.title);
     setMeta('meta[name="twitter:description"]', { name: 'twitter:description' }, page.description);
     if (page.image) setMeta('meta[name="twitter:image"]', { name: 'twitter:image' }, page.image);
+
     const twitterHandle = normalizeTwitterHandle(settings.twitterHandle);
-    if (twitterHandle) setMeta('meta[name="twitter:site"]', { name: 'twitter:site' }, twitterHandle);
+    if (twitterHandle) {
+      setMeta('meta[name="twitter:site"]', { name: 'twitter:site' }, twitterHandle);
+      setMeta('meta[name="twitter:creator"]', { name: 'twitter:creator' }, twitterHandle);
+    } else {
+      removeMeta('meta[name="twitter:site"]');
+      removeMeta('meta[name="twitter:creator"]');
+    }
+
+    if (page.type === 'article' && page.articlePublished) {
+      setMeta('meta[property="article:published_time"]', { property: 'article:published_time' }, page.articlePublished);
+      setMeta('meta[property="article:modified_time"]', { property: 'article:modified_time' }, page.articleModified || page.articlePublished);
+      if (page.articleSection) setMeta('meta[property="article:section"]', { property: 'article:section' }, page.articleSection);
+    } else {
+      removeMeta('meta[property="article:published_time"]');
+      removeMeta('meta[property="article:modified_time"]');
+      removeMeta('meta[property="article:section"]');
+      removeMeta('meta[property="article:publisher"]');
+    }
 
     const scriptId = 'phulpur24-jsonld';
     document.getElementById(scriptId)?.remove();
@@ -201,4 +288,8 @@ export default function SeoManager() {
   }, [page, settings]);
 
   return null;
+}
+
+function ensureFaviconUrl(settings: SiteSettings): string {
+  return resolveFaviconUrl(settings);
 }

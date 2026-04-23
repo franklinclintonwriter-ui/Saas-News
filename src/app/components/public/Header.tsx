@@ -57,7 +57,7 @@ export default function Header() {
     [state.navigation],
   );
   const headerLinks = useMemo(() => {
-    if (managedHeaderLinks.length > 1) {
+    if (managedHeaderLinks.length > 0) {
       return managedHeaderLinks.map((item) => ({
         key: item.id,
         label: item.label,
@@ -77,7 +77,7 @@ export default function Header() {
   }, [managedHeaderLinks, navCategories]);
   const { settings } = state;
   const brand = settings.siteTitle || settings.organizationName || 'Publication';
-  const logoUrl = settings.logoUrl || settings.faviconUrl;
+  const logoUrl = settings.logoUrl;
   const showLogo = settings.showHeaderLogo && Boolean(logoUrl);
   const showTitle = settings.showSiteTitle || !showLogo;
   const subscriptionsEnabled = settings.newsletterEnabled;

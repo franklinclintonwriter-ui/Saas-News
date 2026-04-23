@@ -384,6 +384,7 @@ async function main() {
       defaultMetaDescription: 'Read Phulpur24 for verified local news, public-interest reporting, analysis, and timely updates from Phulpur, Mymensingh, Bangladesh and beyond.',
       defaultKeywords: 'Phulpur24, Phulpur news, Mymensingh news, Bangladesh news, local news, breaking news',
       twitterHandle: '',
+      googleSiteVerification: 'Scecq8dllrg_egJpIykwEbTZbz2ymYg9JO_eC6NwFOA',
       robotsIndex: true,
       robotsFollow: true,
       structuredDataEnabled: true,

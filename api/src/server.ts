@@ -2,12 +2,13 @@ import express from 'express';
 import { config } from './config.js';
 import { errorHandler, notFound } from './errors.js';
 import { closePrisma } from './prisma.js';
-import router from './routes.js';
+import router, { serveMediaFile } from './routes.js';
 import { applySecurity } from './security.js';
 
 const app = express();
 
 applySecurity(app);
+app.get('/media/:id/file', serveMediaFile);
 app.use('/api', router);
 app.use((_req, _res) => notFound('API route not found.'));
 app.use(errorHandler);

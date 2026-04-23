@@ -317,7 +317,7 @@ const DEFAULT_SETTINGS: SiteSettings = {
     'Read Phulpur24 for verified local news, public-interest reporting, analysis, and timely updates from Phulpur, Mymensingh, Bangladesh and beyond.',
   defaultKeywords: 'Phulpur24, Phulpur news, Mymensingh news, Bangladesh news, local news, breaking news',
   twitterHandle: '',
-  googleSiteVerification: '',
+  googleSiteVerification: 'Scecq8dllrg_egJpIykwEbTZbz2ymYg9JO_eC6NwFOA',
   bingSiteVerification: '',
   robotsIndex: true,
   robotsFollow: true,
@@ -344,8 +344,8 @@ const DEFAULT_SETTINGS: SiteSettings = {
   tipsEmail: 'tips@phulpur24.com',
   phone: '',
   address: '',
-  businessHours: 'Mon-Fri 9am-6pm EST',
-  officeLocations: 'New York|123 News Street, NY 10001|+1 (555) 123-4567\nLondon|456 Fleet Street, EC4Y 1AA|+44 20 1234 5678\nTokyo|789 Shibuya, 150-0002|+81 3 1234 5678',
+  businessHours: 'Sunday-Thursday 9am-6pm',
+  officeLocations: 'Phulpur|Phulpur, Mymensingh, Bangladesh|',
   newsletterFromName: 'Phulpur24 Team',
   newsletterFromEmail: 'newsletter@phulpur24.com',
   newsletterEnabled: true,
@@ -724,6 +724,7 @@ function withAudit(state: CmsState, actor: string, action: string, resource: str
 
 export type CmsAction =
   | { type: 'HYDRATE'; payload: CmsState }
+  | { type: 'POST_DETAIL_HYDRATE'; post: AdminPost }
   | { type: 'RESET_DEMO'; actor?: string }
   | { type: 'POST_UPSERT'; post: AdminPost; actor?: string }
   | { type: 'POST_DELETE'; id: string; actor?: string }
@@ -766,6 +767,13 @@ export function cmsReducer(state: CmsState, action: CmsAction): CmsState {
   switch (action.type) {
     case 'HYDRATE':
       return action.payload;
+    case 'POST_DETAIL_HYDRATE':
+      return {
+        ...state,
+        posts: state.posts.some((post) => post.id === action.post.id)
+          ? state.posts.map((post) => (post.id === action.post.id ? action.post : post))
+          : [action.post, ...state.posts],
+      };
     case 'RESET_DEMO': {
       const next = createInitialCmsState();
       return withAudit(next, action.actor ?? actor, 'Workspace reset', 'System', 'Demo dataset restored');

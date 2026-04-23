@@ -413,11 +413,11 @@ export default function Users() {
               </div>
               <div>
                 <label className={labelClass}>Public title</label>
-                <input type="text" value={form.title} onChange={(e) => update('title', e.target.value)} className={fieldClass} placeholder="Technology editor" />
+                <input type="text" value={form.title} onChange={(e) => update('title', e.target.value)} className={fieldClass} placeholder="Local news editor" />
               </div>
               <div>
                 <label className={labelClass}>Location</label>
-                <input type="text" value={form.location} onChange={(e) => update('location', e.target.value)} className={fieldClass} placeholder="New York" />
+                <input type="text" value={form.location} onChange={(e) => update('location', e.target.value)} className={fieldClass} placeholder="Phulpur, Mymensingh" />
               </div>
               <div className="md:col-span-2">
                 <label className={labelClass}>Public bio</label>

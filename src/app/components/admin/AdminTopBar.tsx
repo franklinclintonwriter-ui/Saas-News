@@ -39,23 +39,32 @@ import {
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
 import { formatRelative } from '../../lib/admin/cms-state';
+import { hasMinimumRole, type AdminRole } from '../../lib/admin/role-access';
 
 interface AdminTopBarProps {
   onMenuClick: () => void;
 }
 
-const navigationItems = [
+type NavigationItem = {
+  label: string;
+  path: string;
+  icon: typeof LayoutDashboard;
+  description: string;
+  minRole?: AdminRole;
+};
+
+const navigationItems: NavigationItem[] = [
   { label: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard, description: 'Workspace command center' },
   { label: 'All posts', path: '/admin/posts', icon: FileText, description: 'Editorial queue and publishing' },
   { label: 'Pages', path: '/admin/pages', icon: FileText, description: 'Static pages and legal content' },
   { label: 'Contact inbox', path: '/admin/contact', icon: Inbox, description: 'Reader messages' },
-  { label: 'Newsletter', path: '/admin/newsletter', icon: MailCheck, description: 'Subscribers and email audience' },
+  { label: 'Newsletter', path: '/admin/newsletter', icon: MailCheck, description: 'Subscribers and email audience', minRole: 'EDITOR' },
   { label: 'Ads', path: '/admin/ads', icon: Megaphone, description: 'Placements and campaigns' },
   { label: 'Navigation', path: '/admin/navigation', icon: NavigationIcon, description: 'Menus and route links' },
-  { label: 'Audit log', path: '/admin/audit-log', icon: ClipboardList, description: 'Security activity stream' },
-  { label: 'Users', path: '/admin/users', icon: Users, description: 'Roles, profiles, and staff' },
-  { label: 'Settings', path: '/admin/settings', icon: Settings, description: 'Brand, SEO, and theme controls' },
-  { label: 'API Config', path: '/admin/api-config', icon: KeyRound, description: 'AI and integration keys' },
+  { label: 'Audit log', path: '/admin/audit-log', icon: ClipboardList, description: 'Security activity stream', minRole: 'ADMIN' },
+  { label: 'Users', path: '/admin/users', icon: Users, description: 'Roles, profiles, and staff', minRole: 'ADMIN' },
+  { label: 'Settings', path: '/admin/settings', icon: Settings, description: 'Brand, SEO, and theme controls', minRole: 'ADMIN' },
+  { label: 'API Config', path: '/admin/api-config', icon: KeyRound, description: 'AI and integration keys', minRole: 'ADMIN' },
 ];
 
 const pageMeta = [
@@ -108,6 +117,14 @@ export default function AdminTopBar({ onMenuClick }: AdminTopBarProps) {
     [location.pathname],
   );
 
+  const availableNavigationItems = useMemo(
+    () =>
+      navigationItems.filter((item) =>
+        item.minRole ? hasMinimumRole(user?.role, item.minRole) : true,
+      ),
+    [user?.role],
+  );
+
   const recentAudit = state.auditLog.slice(0, 8);
   const draftCount = state.posts.filter((post) => post.status === 'Draft').length;
   const pendingComments = state.comments.filter((comment) => comment.status === 'pending').length;
@@ -135,7 +152,7 @@ export default function AdminTopBar({ onMenuClick }: AdminTopBarProps) {
           </CommandGroup>
           <CommandSeparator />
           <CommandGroup heading="Navigation">
-            {navigationItems.map((item) => {
+            {availableNavigationItems.map((item) => {
               const Icon = item.icon;
               return (
                 <CommandItem

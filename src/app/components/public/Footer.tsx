@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router';
-import { Facebook, Twitter, Instagram } from 'lucide-react';
+import { Facebook, Twitter, Instagram, Linkedin } from 'lucide-react';
 import { useCms } from '../../context/cms-context';
 
 type UsefulLink =
@@ -46,11 +46,12 @@ export default function Footer() {
     if (settings.facebook) items.push({ Icon: Facebook, label: 'Facebook', href: settings.facebook });
     if (settings.twitter) items.push({ Icon: Twitter, label: 'X (Twitter)', href: settings.twitter });
     if (settings.instagram) items.push({ Icon: Instagram, label: 'Instagram', href: settings.instagram });
+    if (settings.linkedin) items.push({ Icon: Linkedin, label: 'LinkedIn', href: settings.linkedin });
     return items;
-  }, [settings.facebook, settings.twitter, settings.instagram]);
+  }, [settings.facebook, settings.twitter, settings.instagram, settings.linkedin]);
 
   const brand = settings.siteTitle || settings.organizationName || 'Publication';
-  const logoUrl = settings.logoUrl || settings.faviconUrl;
+  const logoUrl = settings.logoUrl;
   const showFooterLogo = settings.showFooterLogo && Boolean(logoUrl);
   const showFooterTitle = settings.showFooterSiteTitle || !showFooterLogo;
   const year = new Date().getFullYear();

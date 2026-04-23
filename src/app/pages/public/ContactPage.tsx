@@ -34,7 +34,7 @@ export default function ContactPage() {
   const pressEmail = settings.pressEmail || settings.contactEmail;
   const advertisingEmail = settings.advertisingEmail || settings.supportEmail;
   const tipsEmail = settings.tipsEmail || settings.contactEmail;
-  const businessHours = settings.businessHours || 'Mon-Fri 9am-6pm EST';
+  const businessHours = settings.businessHours || 'Sunday-Thursday 9am-6pm';
   const offices = parseOfficeLocations(settings.officeLocations, settings.address, settings.phone);
   const {
     register,
@@ -197,7 +197,7 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <p className="font-semibold text-sm">Phone</p>
-                    <p className="text-sm text-[#6B7280]">{settings.phone || '+1 (555) 123-4567'}</p>
+                    <p className="text-sm text-[#6B7280]">{settings.phone || 'Phone number will be published soon'}</p>
                     <p className="text-sm text-[#6B7280]">{businessHours}</p>
                   </div>
                 </div>
@@ -208,7 +208,7 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <p className="font-semibold text-sm">Address</p>
-                    <p className="text-sm text-[#6B7280] whitespace-pre-line">{settings.address || '123 News Street\nNew York, NY 10001\nUnited States'}</p>
+                    <p className="text-sm text-[#6B7280] whitespace-pre-line">{settings.address || 'Phulpur, Mymensingh\nBangladesh'}</p>
                   </div>
                 </div>
               </div>

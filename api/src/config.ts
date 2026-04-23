@@ -12,7 +12,7 @@ function readNumber(name: string, fallback: number): number {
 function readList(name: string, fallback: string[]): string[] {
   return (process.env[name] ?? fallback.join(','))
     .split(',')
-    .map((item) => item.trim())
+    .map((item) => item.trim().replace(/\/+$/, ''))
     .filter(Boolean);
 }
 
@@ -29,6 +29,23 @@ const port = readNumber('API_PORT', 4102);
 
 function trimTrailingSlash(value: string): string {
   return value.trim().replace(/\/+$/, '');
+}
+
+function normalizeApiPublicUrl(raw: string | undefined, port: number): string {
+  const value = trimTrailingSlash(raw || `http://127.0.0.1:${port}/api`);
+  try {
+    const url = new URL(value);
+    const pathname = url.pathname.replace(/\/+$/, '');
+    if (!pathname) {
+      url.pathname = '/api';
+      url.search = '';
+      url.hash = '';
+      return trimTrailingSlash(url.toString());
+    }
+  } catch {
+    // Keep non-URL values unchanged after trimming; hosting panels sometimes use env expansion.
+  }
+  return value;
 }
 
 function normalizeR2Endpoint(raw: string | undefined, bucket: string): string {
@@ -52,7 +69,7 @@ const r2Bucket = process.env.R2_BUCKET?.trim() || '';
 export const config = {
   nodeEnv: process.env.NODE_ENV ?? 'development',
   port,
-  apiPublicUrl: trimTrailingSlash(process.env.API_PUBLIC_URL || `http://127.0.0.1:${port}/api`),
+  apiPublicUrl: normalizeApiPublicUrl(process.env.API_PUBLIC_URL, port),
   corsOrigins: readList('CORS_ORIGIN', devCorsOrigins),
   jwtSecret: process.env.JWT_SECRET ?? devAccessSecret,
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET ?? devRefreshSecret,

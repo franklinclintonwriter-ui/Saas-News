@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { config } from './config.js';
-import { badRequest, serviceUnavailable } from './errors.js';
+import { ApiError, badRequest, serviceUnavailable } from './errors.js';
 import { getAiRuntimeConfig } from './integrations.js';
 import { slugify } from './utils.js';
 
@@ -67,6 +67,8 @@ export type GeneratedPostImageAsset = {
 
 const MIN_ARTICLE_WORDS = 1500;
 const MAX_ARTICLE_WORDS = 3000;
+const AI_TEXT_MAX_TOKENS = 8192;
+const MAX_EXPANSION_PASSES = 3;
 
 const draftSchema = z.object({
   title: z.string().min(3).max(220),
@@ -162,6 +164,30 @@ Return JSON with exactly these keys:
   "imageAlt": string,
   "imageCaption": string
 }`;
+}
+
+function buildExpansionPrompt(input: AiGenerateInput, draft: z.infer<typeof draftSchema>, words: number): string {
+  const primary = input.focusKeywords[0] ?? draft.focusKeyword ?? draft.title;
+  const target = Math.max(MIN_ARTICLE_WORDS + 250, words + 650);
+  return `Expand and repair this generated news draft so it is publication-ready.
+
+The previous draft is too short: ${words} words. Rewrite/expand the "content" field to at least ${target} words while staying under ${MAX_ARTICLE_WORDS} words.
+
+Keep the same core facts and do not invent named sources, quotes, exact statistics, legal claims, casualty figures, or official statements.
+Add missing context, reader-service details, careful caveats, stakeholder impact, background, what happens next, and FAQ answers.
+Add concrete explanatory paragraphs under existing headings and add new useful H2/H3 sections when the current structure is thin.
+Preserve or improve the SEO fields.
+Use Markdown only inside "content".
+Return a single JSON object only, with the same keys required by the original task.
+
+Primary focus keyword:
+${primary}
+
+Original topic:
+${input.topic.trim()}
+
+Draft JSON to expand:
+${JSON.stringify(draft)}`;
 }
 
 export function parseKeywords(raw: string | string[]): string[] {
@@ -288,7 +314,7 @@ function normalizeDraft(parsed: z.infer<typeof draftSchema>, provider: AiProvide
   };
 }
 
-function parseDraftJson(text: string, provider: AiProvider, model: string): GeneratedNewsDraft {
+function parseDraftJsonObject(text: string): z.infer<typeof draftSchema> {
   let raw: unknown;
   try {
     raw = JSON.parse(stripJsonFences(text));
@@ -299,7 +325,7 @@ function parseDraftJson(text: string, provider: AiProvider, model: string): Gene
   if (!parsed.success) {
     badRequest(`AI draft failed validation: ${parsed.error.issues.map((i) => i.message).join('; ')}`);
   }
-  return normalizeDraft(parsed.data, provider, model);
+  return parsed.data;
 }
 
 async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
@@ -309,9 +335,21 @@ async function fetchWithTimeout(url: string, init: RequestInit): Promise<Respons
     return await fetch(url, { ...init, signal: ctrl.signal });
   } catch (e) {
     if (e instanceof Error && e.name === 'AbortError') {
-      badRequest(`AI request timed out after ${Math.round(config.aiRequestTimeoutMs / 1000)}s.`);
+      serviceUnavailable(`AI request timed out after ${Math.round(config.aiRequestTimeoutMs / 1000)}s.`);
     }
-    throw e;
+    const host = (() => {
+      try {
+        return new URL(url).hostname;
+      } catch {
+        return 'the provider';
+      }
+    })();
+    const cause = e instanceof Error && 'cause' in e ? (e as Error & { cause?: unknown }).cause : undefined;
+    const reason =
+      cause && typeof cause === 'object' && 'code' in cause && typeof (cause as { code?: unknown }).code === 'string'
+        ? ` (${(cause as { code: string }).code})`
+        : '';
+    serviceUnavailable(`The API server could not reach ${host}${reason}. Check outbound firewall/DNS for this host or choose another configured AI provider.`);
   } finally {
     clearTimeout(t);
   }
@@ -337,7 +375,7 @@ async function callOpenAI(apiKey: string, model: string, system: string, user: s
     body: JSON.stringify({
       model,
       temperature: 0.45,
-      max_tokens: 8192,
+      max_tokens: AI_TEXT_MAX_TOKENS,
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: system },
@@ -368,7 +406,7 @@ async function callOpenRouter(apiKey: string, model: string, system: string, use
     body: JSON.stringify({
       model,
       temperature: 0.45,
-      max_tokens: 8192,
+      max_tokens: AI_TEXT_MAX_TOKENS,
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: system },
@@ -397,7 +435,7 @@ async function callAnthropicOnce(apiKey: string, model: string, system: string, 
     },
     body: JSON.stringify({
       model,
-      max_tokens: 8192,
+      max_tokens: AI_TEXT_MAX_TOKENS,
       temperature: 0.45,
       system,
       messages: [{ role: 'user', content: user }],
@@ -442,7 +480,7 @@ async function callGoogle(apiKey: string, model: string, system: string, user: s
       contents: [{ role: 'user', parts: [{ text: combined }] }],
       generationConfig: {
         temperature: 0.45,
-        maxOutputTokens: 8192,
+        maxOutputTokens: AI_TEXT_MAX_TOKENS,
         responseMimeType: 'application/json',
       },
     }),
@@ -613,20 +651,40 @@ export async function aiCapabilities(): Promise<{
 export async function generateNewsDraft(input: AiGenerateInput): Promise<GeneratedNewsDraft> {
   const system = buildSystemPrompt();
   const user = buildUserPrompt(input);
+  let result = await callNewsProviderWithFallback(input.provider, input.model, system, user);
+  let parsed = parseDraftJsonObject(result.text);
+  let words = countWords(parsed.content);
 
+  for (let pass = 0; pass < MAX_EXPANSION_PASSES && words < MIN_ARTICLE_WORDS; pass += 1) {
+    const expansionPrompt = buildExpansionPrompt(input, parsed, words);
+    result = await callNewsProviderWithFallback(result.provider, result.model, system, expansionPrompt);
+    parsed = parseDraftJsonObject(result.text);
+    words = countWords(parsed.content);
+  }
+
+  return normalizeDraft(parsed, result.provider, result.model);
+}
+
+type NewsProviderResult = {
+  provider: AiProvider;
+  model: string;
+  text: string;
+};
+
+async function callNewsProvider(provider: AiProvider, modelOverride: string | undefined, system: string, user: string): Promise<NewsProviderResult> {
   let text: string;
   let modelUsed: string;
 
-  switch (input.provider) {
+  switch (provider) {
     case 'openai': {
       const runtime = await getAiRuntimeConfig('openai');
-      modelUsed = (input.model?.trim() || runtime.model || config.openaiModel).slice(0, 80);
+      modelUsed = (modelOverride?.trim() || runtime.model || config.openaiModel).slice(0, 80);
       text = await callOpenAI(runtime.apiKey, modelUsed, system, user, runtime.endpoint);
       break;
     }
     case 'anthropic': {
       const runtime = await getAiRuntimeConfig('anthropic');
-      modelUsed = (input.model?.trim() || runtime.model || config.anthropicModel).slice(0, 80);
+      modelUsed = (modelOverride?.trim() || runtime.model || config.anthropicModel).slice(0, 80);
       const result = await callAnthropic(runtime.apiKey, modelUsed, system, user, runtime.endpoint);
       text = result.text;
       modelUsed = result.model;
@@ -634,13 +692,13 @@ export async function generateNewsDraft(input: AiGenerateInput): Promise<Generat
     }
     case 'google': {
       const runtime = await getAiRuntimeConfig('google');
-      modelUsed = (input.model?.trim() || runtime.model || config.googleGeminiModel).slice(0, 80);
+      modelUsed = (modelOverride?.trim() || runtime.model || config.googleGeminiModel).slice(0, 80);
       text = await callGoogle(runtime.apiKey, modelUsed, system, user, runtime.endpoint);
       break;
     }
     case 'openrouter': {
       const runtime = await getAiRuntimeConfig('openrouter');
-      modelUsed = (input.model?.trim() || runtime.model || config.openrouterModel).slice(0, 120);
+      modelUsed = (modelOverride?.trim() || runtime.model || config.openrouterModel).slice(0, 120);
       text = await callOpenRouter(runtime.apiKey, modelUsed, system, user, runtime.endpoint);
       break;
     }
@@ -648,7 +706,31 @@ export async function generateNewsDraft(input: AiGenerateInput): Promise<Generat
       badRequest('Unknown AI provider.');
   }
 
-  return parseDraftJson(text, input.provider, modelUsed);
+  return { provider, model: modelUsed, text };
+}
+
+function providerFallbackOrder(primary: AiProvider): AiProvider[] {
+  return [...new Set<AiProvider>([primary, 'openrouter', 'anthropic', 'google', 'openai'])];
+}
+
+function canFallback(error: unknown): boolean {
+  if (!(error instanceof ApiError)) return false;
+  if (error.status === 503) return true;
+  return /quota|rate limit|too many requests|model|not supported|not available|overloaded/i.test(error.message);
+}
+
+async function callNewsProviderWithFallback(primary: AiProvider, modelOverride: string | undefined, system: string, user: string): Promise<NewsProviderResult> {
+  const messages: string[] = [];
+  for (const provider of providerFallbackOrder(primary)) {
+    try {
+      return await callNewsProvider(provider, provider === primary ? modelOverride : undefined, system, user);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown provider error.';
+      if (!canFallback(error)) throw error;
+      messages.push(`${provider}: ${message}`);
+    }
+  }
+  serviceUnavailable(`No configured AI provider could complete the request. ${messages.join(' ')}`);
 }
 
 export async function generatePostImageAsset(input: AiGeneratePostImageInput): Promise<GeneratedPostImageAsset> {

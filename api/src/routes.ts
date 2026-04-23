@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import { Router } from 'express';
+import { Router, type RequestHandler } from 'express';
 import multer from 'multer';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
@@ -63,6 +63,69 @@ const upload = multer({
   },
 });
 
+const PUBLIC_HTTP_CACHE = 'public, max-age=60, s-maxage=900, stale-while-revalidate=86400';
+const PUBLIC_MEMORY_CACHE_MS = 120_000;
+const MAX_PUBLIC_CACHE_ENTRIES = 250;
+const publicResponseCache = new Map<string, {
+  statusCode: number;
+  contentType: string;
+  body: unknown;
+  expiresAt: number;
+}>();
+
+function clearPublicResponseCache(): void {
+  publicResponseCache.clear();
+}
+
+const publicCacheMiddleware: RequestHandler = (req, res, next) => {
+  if (!['GET', 'HEAD'].includes(req.method)) {
+    next();
+    return;
+  }
+
+  const key = req.originalUrl;
+  const cached = publicResponseCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) {
+    res.setHeader('Cache-Control', PUBLIC_HTTP_CACHE);
+    res.setHeader('X-Phulpur-Cache', 'HIT');
+    if (cached.contentType) res.setHeader('Content-Type', cached.contentType);
+    res.status(cached.statusCode).send(req.method === 'HEAD' ? undefined : cached.body);
+    return;
+  }
+  if (cached) publicResponseCache.delete(key);
+
+  res.setHeader('Cache-Control', PUBLIC_HTTP_CACHE);
+  res.setHeader('X-Phulpur-Cache', 'MISS');
+
+  const send = res.send.bind(res);
+  res.send = ((body?: unknown) => {
+    if (res.statusCode >= 200 && res.statusCode < 300 && body !== undefined) {
+      if (publicResponseCache.size >= MAX_PUBLIC_CACHE_ENTRIES) {
+        const oldest = publicResponseCache.keys().next().value;
+        if (oldest) publicResponseCache.delete(oldest);
+      }
+      publicResponseCache.set(key, {
+        statusCode: res.statusCode,
+        contentType: String(res.getHeader('Content-Type') || ''),
+        body,
+        expiresAt: Date.now() + PUBLIC_MEMORY_CACHE_MS,
+      });
+    }
+    return send(body);
+  }) as typeof res.send;
+
+  next();
+};
+
+const clearPublicCacheAfterMutation: RequestHandler = (req, res, next) => {
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+    res.on('finish', () => {
+      if (res.statusCode >= 200 && res.statusCode < 400) clearPublicResponseCache();
+    });
+  }
+  next();
+};
+
 const postInclude = {
   author: {
     select: {
@@ -86,9 +149,114 @@ const postInclude = {
   _count: { select: { comments: true } },
 };
 
+const publicPostSummarySelect = {
+  id: true,
+  title: true,
+  slug: true,
+  excerpt: true,
+  status: true,
+  featured: true,
+  breaking: true,
+  seoTitle: true,
+  metaDescription: true,
+  focusKeyword: true,
+  canonicalUrl: true,
+  featuredImageId: true,
+  scheduledAt: true,
+  readTime: true,
+  views: true,
+  updatedAt: true,
+  publishedAt: true,
+  author: postInclude.author,
+  category: true,
+  featuredImage: true,
+  tags: postInclude.tags,
+  _count: postInclude._count,
+};
+
+const adminPostSummarySelect = {
+  id: true,
+  title: true,
+  slug: true,
+  excerpt: true,
+  status: true,
+  featured: true,
+  breaking: true,
+  seoTitle: true,
+  metaDescription: true,
+  focusKeyword: true,
+  canonicalUrl: true,
+  featuredImageId: true,
+  scheduledAt: true,
+  readTime: true,
+  views: true,
+  updatedAt: true,
+  publishedAt: true,
+  author: postInclude.author,
+  category: true,
+  tags: postInclude.tags,
+  _count: postInclude._count,
+};
+
+const roleRank = {
+  CONTRIBUTOR: 1,
+  AUTHOR: 2,
+  EDITOR: 3,
+  ADMIN: 4,
+} as const;
+
+function hasRole(role: string, minimum: keyof typeof roleRank): boolean {
+  return (roleRank[role as keyof typeof roleRank] ?? 0) >= roleRank[minimum];
+}
+
+type PostSortMode = 'relevance' | 'recent' | 'popular';
+
+function normalizePostSort(value: unknown): PostSortMode {
+  const raw = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (raw === 'recent' || raw === 'popular' || raw === 'relevance') return raw;
+  return 'relevance';
+}
+
+function textMatchScore(value: string, terms: string[], weight: number): number {
+  const hay = value.toLowerCase();
+  let score = 0;
+  for (const term of terms) {
+    if (!term) continue;
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const matches = hay.match(new RegExp(escaped, 'g'));
+    if (matches?.length) score += matches.length * weight;
+  }
+  return score;
+}
+
+function postRelevanceScore(post: any, terms: string[]): number {
+  if (!terms.length) return 0;
+  const tagText = (post.tags ?? [])
+    .map((row: any) => row?.tag?.name || row?.tag?.slug || '')
+    .join(' ');
+  return (
+    textMatchScore(post.title || '', terms, 8) +
+    textMatchScore(post.excerpt || '', terms, 5) +
+    textMatchScore(post.content || '', terms, 2) +
+    textMatchScore(tagText, terms, 4)
+  );
+}
+
+function mediaUrlForClient(media: { id: string; url: string }): string {
+  return media.url?.startsWith('data:image/') ? `/api/media/${media.id}/file` : media.url;
+}
+
+function mapMedia(media: any) {
+  return {
+    ...media,
+    url: mediaUrlForClient(media),
+  };
+}
+
 function mapPost(post: any) {
   return {
     ...post,
+    featuredImage: post.featuredImage ? mapMedia(post.featuredImage) : post.featuredImage,
     tags: post.tags?.map((row: any) => row.tag) ?? [],
   };
 }
@@ -116,6 +284,15 @@ function escapeXml(value: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function escapeSvgText(value: string): string {
@@ -177,6 +354,15 @@ function generatedPostImageDataUrl(title: string, category: string, seed: string
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
+function parseStoredImageDataUrl(dataUrl: string): { mime: string; buffer: Buffer } | null {
+  const match = /^data:(image\/[a-z0-9.+-]+)(?:;charset=[^;,]+)?(;base64)?,(.+)$/i.exec(dataUrl);
+  if (!match) return null;
+  return {
+    mime: match[1]!,
+    buffer: match[2] ? Buffer.from(match[3]!, 'base64') : Buffer.from(decodeURIComponent(match[3]!), 'utf8'),
+  };
+}
+
 async function ensureGeneratedFeaturedImage(input: {
   postId: string;
   title: string;
@@ -186,27 +372,37 @@ async function ensureGeneratedFeaturedImage(input: {
   const id = `auto-post-image-${input.postId}`;
   const name = `${slugify(input.title).slice(0, 80) || input.postId}-auto.svg`;
   const url = generatedPostImageDataUrl(input.title, input.categoryName, input.postId);
+  const stored = await storeDataUrlMedia({
+    id,
+    name,
+    fallbackMime: 'image/svg+xml',
+    dataUrl: url,
+  });
   const media = await prisma.mediaAsset.upsert({
     where: { id },
     update: {
       name,
       alt: input.title,
-      url,
+      url: stored.url,
       mime: 'image/svg+xml',
-      sizeBytes: Buffer.byteLength(url),
+      sizeBytes: stored.sizeBytes || Buffer.byteLength(url),
       width: 1200,
       height: 800,
+      storageProvider: stored.provider,
+      storageKey: stored.key,
       uploaderId: input.uploaderId ?? null,
     },
     create: {
       id,
       name,
       alt: input.title,
-      url,
+      url: stored.url,
       mime: 'image/svg+xml',
-      sizeBytes: Buffer.byteLength(url),
+      sizeBytes: stored.sizeBytes || Buffer.byteLength(url),
       width: 1200,
       height: 800,
+      storageProvider: stored.provider,
+      storageKey: stored.key,
       uploaderId: input.uploaderId ?? null,
     },
   });
@@ -268,6 +464,12 @@ async function resolveTagIds(tagIds: string[] = [], tagSlugs: string[] = []) {
   return ids.map((tagId) => ({ tagId }));
 }
 
+function tagRelationCreateRows(tagRows: { tagId: string }[]) {
+  return tagRows.map(({ tagId }) => ({
+    tag: { connect: { id: tagId } },
+  }));
+}
+
 function publishFields(status: string, publishedAt?: string | null, scheduledAt?: string | null) {
   const now = new Date();
   if (status === 'PUBLISHED') {
@@ -321,7 +523,7 @@ router.get('/health', (_req, res) => {
   ok(res, { status: 'healthy', service: 'phulpur24-api', time: new Date().toISOString(), storage: storageStatus() });
 });
 
-router.get('/media/:id/file', asyncHandler(async (req, res) => {
+export const serveMediaFile: RequestHandler = asyncHandler(async (req, res) => {
   const media = await prisma.mediaAsset.findUnique({ where: { id: paramString(req.params.id) } });
   if (!media) notFound('Media asset not found.');
 
@@ -335,10 +537,10 @@ router.get('/media/:id/file', asyncHandler(async (req, res) => {
   }
 
   if (media.url.startsWith('data:image/')) {
-    const match = /^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i.exec(media.url);
-    if (!match) badRequest('Stored media data URL is invalid.');
-    const buffer = Buffer.from(match[2]!, 'base64');
-    res.setHeader('Content-Type', match[1]!);
+    const parsed = parseStoredImageDataUrl(media.url);
+    if (!parsed) badRequest('Stored media data URL is invalid.');
+    const buffer = parsed.buffer;
+    res.setHeader('Content-Type', parsed.mime);
     res.setHeader('Content-Length', String(buffer.byteLength));
     res.setHeader('Cache-Control', 'public, max-age=604800');
     res.end(buffer);
@@ -346,7 +548,9 @@ router.get('/media/:id/file', asyncHandler(async (req, res) => {
   }
 
   res.redirect(media.url);
-}));
+});
+
+router.get('/media/:id/file', serveMediaFile);
 
 router.post(
   '/auth/login',
@@ -396,6 +600,8 @@ router.post(
 router.get('/auth/me', authenticate, (req, res) => {
   ok(res, { user: req.user });
 });
+
+router.use('/public', publicCacheMiddleware);
 
 router.get(
   '/public/settings',
@@ -470,6 +676,91 @@ router.get(
 );
 
 router.get(
+  '/public/share/article/:slug',
+  asyncHandler(async (req, res) => {
+    const idOrSlug = paramString(req.params.slug);
+    const now = new Date();
+    const settings = await getSiteSettings();
+    const base = siteUrl(settings);
+
+    const post = await prisma.post.findFirst({
+      where: {
+        OR: [{ id: idOrSlug }, { slug: idOrSlug }],
+        deletedAt: null,
+        status: 'PUBLISHED',
+        publishedAt: { lte: now },
+      },
+      include: {
+        author: { select: { name: true } },
+        category: { select: { name: true } },
+        featuredImage: { select: { id: true, url: true } },
+      },
+    });
+
+    if (!post) {
+      const fallbackUrl = absoluteUrl(base, '/');
+      const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><meta http-equiv="refresh" content="0;url=${escapeHtml(fallbackUrl)}"/><title>Phulpur24</title></head><body><p>Redirecting...</p></body></html>`;
+      res.type('text/html').send(html);
+      return;
+    }
+
+    const canonicalUrl = absoluteUrl(base, `/article/${post.slug}`);
+    const shareUrl = absoluteUrl(base, `/api/public/share/article/${post.slug}`);
+    const siteName = settings.siteTitle || settings.organizationName || 'Phulpur24';
+    const description = (post.excerpt || settings.defaultMetaDescription || settings.tagline || '').trim();
+    const imageUrl = post.featuredImageId
+      ? absoluteUrl(base, `/media/${post.featuredImageId}/file`)
+      : (post.featuredImage?.url || settings.ogImageUrl || settings.logoUrl || '');
+    const twitterHandle = settings.twitterHandle?.trim()
+      ? (settings.twitterHandle.startsWith('@') ? settings.twitterHandle : `@${settings.twitterHandle}`)
+      : '';
+
+    const html = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapeHtml(post.title)} | ${escapeHtml(siteName)}</title>
+    <meta name="description" content="${escapeHtml(description)}" />
+    <link rel="canonical" href="${escapeHtml(canonicalUrl)}" />
+
+    <meta property="og:site_name" content="${escapeHtml(siteName)}" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="${escapeHtml(post.title)}" />
+    <meta property="og:description" content="${escapeHtml(description)}" />
+    <meta property="og:url" content="${escapeHtml(shareUrl)}" />
+    ${imageUrl ? `<meta property="og:image" content="${escapeHtml(imageUrl)}" />` : ''}
+    ${imageUrl ? `<meta property="og:image:alt" content="${escapeHtml(post.title)}" />` : ''}
+    <meta property="article:published_time" content="${(post.publishedAt ?? post.updatedAt).toISOString()}" />
+    <meta property="article:modified_time" content="${post.updatedAt.toISOString()}" />
+    <meta property="article:section" content="${escapeHtml(post.category.name)}" />
+
+    <meta name="twitter:card" content="${imageUrl ? 'summary_large_image' : 'summary'}" />
+    <meta name="twitter:title" content="${escapeHtml(post.title)}" />
+    <meta name="twitter:description" content="${escapeHtml(description)}" />
+    ${imageUrl ? `<meta name="twitter:image" content="${escapeHtml(imageUrl)}" />` : ''}
+    ${twitterHandle ? `<meta name="twitter:site" content="${escapeHtml(twitterHandle)}" />` : ''}
+    ${twitterHandle ? `<meta name="twitter:creator" content="${escapeHtml(twitterHandle)}" />` : ''}
+
+    <meta name="robots" content="noindex,follow" />
+    <meta http-equiv="refresh" content="0;url=${escapeHtml(canonicalUrl)}" />
+  </head>
+  <body>
+    <main>
+      <h1>${escapeHtml(post.title)}</h1>
+      <p>${escapeHtml(description)}</p>
+      <p><a href="${escapeHtml(canonicalUrl)}">Continue to article</a></p>
+    </main>
+    <script>window.location.replace(${JSON.stringify(canonicalUrl)});</script>
+  </body>
+</html>`;
+
+    res.setHeader('Cache-Control', PUBLIC_HTTP_CACHE);
+    res.type('text/html').send(html);
+  }),
+);
+
+router.get(
   '/public/pages',
   asyncHandler(async (_req, res) => {
     ok(res, await prisma.staticPage.findMany({ where: { status: 'PUBLISHED' }, orderBy: { title: 'asc' } }));
@@ -505,22 +796,38 @@ router.get(
 router.get(
   '/public/categories',
   asyncHandler(async (_req, res) => {
-    ok(res, await prisma.category.findMany({ orderBy: { name: 'asc' }, include: { _count: { select: { posts: true } } } }));
+    const now = new Date();
+    ok(res, await prisma.category.findMany({
+      where: { posts: { some: { deletedAt: null, status: 'PUBLISHED', publishedAt: { lte: now } } } },
+      orderBy: { name: 'asc' },
+      include: { _count: { select: { posts: true } } },
+    }));
   }),
 );
 
 router.get(
   '/public/tags',
   asyncHandler(async (_req, res) => {
-    ok(res, await prisma.tag.findMany({ orderBy: { name: 'asc' }, include: { _count: { select: { posts: true } } } }));
+    const now = new Date();
+    ok(res, await prisma.tag.findMany({
+      where: { posts: { some: { post: { deletedAt: null, status: 'PUBLISHED', publishedAt: { lte: now } } } } },
+      orderBy: { name: 'asc' },
+      include: { _count: { select: { posts: true } } },
+    }));
   }),
 );
 
 router.get(
   '/public/posts',
-  validateQuery(paginationSchema.extend({ category: z.string().optional(), date: z.enum(['all', '24h', '7d', '30d']).optional() })),
+  validateQuery(paginationSchema.extend({
+    category: z.string().optional(),
+    date: z.enum(['all', '24h', '7d', '30d']).optional(),
+    summary: z.string().optional(),
+  })),
   asyncHandler(async (req, res) => {
-    const { page, limit, q, sort, category, date } = queryData(req);
+    const { page, limit, q, sort, category, date, summary } = queryData(req);
+    const sortMode = normalizePostSort(sort);
+    const summaryOnly = ['1', 'true', 'yes'].includes(String(summary ?? '').toLowerCase());
     const where: any = {
       deletedAt: null,
       status: 'PUBLISHED',
@@ -538,11 +845,31 @@ router.get(
         { content: { contains: q } },
       ];
     }
-    const orderBy = sort === 'popular' ? { views: 'desc' as const } : { publishedAt: 'desc' as const };
-    const [total, posts] = await Promise.all([
+    const orderBy = sortMode === 'popular' ? { views: 'desc' as const } : { publishedAt: 'desc' as const };
+    const [total, fetchedPosts] = await Promise.all([
       prisma.post.count({ where }),
-      prisma.post.findMany({ where, include: postInclude, orderBy, skip: (page - 1) * limit, take: limit }),
+      summaryOnly
+        ? prisma.post.findMany({ where, select: publicPostSummarySelect, orderBy, skip: (page - 1) * limit, take: limit })
+        : prisma.post.findMany({ where, include: postInclude, orderBy, skip: (page - 1) * limit, take: limit }),
     ]);
+
+    const terms = String(q ?? '')
+      .toLowerCase()
+      .split(/\s+/)
+      .map((term) => term.trim())
+      .filter(Boolean)
+      .slice(0, 12);
+    const posts =
+      sortMode === 'relevance' && terms.length
+        ? [...fetchedPosts].sort((a, b) => {
+            const scoreDiff = postRelevanceScore(b, terms) - postRelevanceScore(a, terms);
+            if (scoreDiff !== 0) return scoreDiff;
+            const aPublished = new Date(a.publishedAt || a.updatedAt || 0).getTime();
+            const bPublished = new Date(b.publishedAt || b.updatedAt || 0).getTime();
+            return bPublished - aPublished;
+          })
+        : fetchedPosts;
+
     ok(res, posts.map(mapPost), { page, limit, total, totalPages: Math.ceil(total / limit) });
   }),
 );
@@ -627,12 +954,84 @@ router.post(
 );
 
 router.use('/admin', authenticate);
+router.use('/admin', clearPublicCacheAfterMutation);
 
 router.get(
   '/admin/ai/capabilities',
   requireRole('AUTHOR'),
   asyncHandler(async (_req, res) => {
     ok(res, await aiCapabilities());
+  }),
+);
+
+router.get(
+  '/admin/bootstrap',
+  requireRole('AUTHOR'),
+  asyncHandler(async (req, res) => {
+    const mode = String(req.query.mode ?? '').toLowerCase() === 'core' ? 'core' : 'full';
+    const coreMode = mode === 'core';
+    const canEdit = hasRole(req.user!.role, 'EDITOR');
+    const canAdmin = hasRole(req.user!.role, 'ADMIN');
+    const postWhere = { deletedAt: null };
+
+    const [
+      posts,
+      categories,
+      tags,
+      media,
+      comments,
+      users,
+      settings,
+      audit,
+      pages,
+      contactMessages,
+      newsletterSubscribers,
+      ads,
+      navigation,
+      analyticsSnapshots,
+    ] = await Promise.all([
+      prisma.post.findMany({
+        where: postWhere,
+        select: adminPostSummarySelect,
+        orderBy: { updatedAt: 'desc' },
+        take: coreMode ? 60 : 100,
+      }),
+      prisma.category.findMany({ orderBy: { name: 'asc' }, include: { _count: { select: { posts: true } } } }),
+      prisma.tag.findMany({ orderBy: { name: 'asc' }, include: { _count: { select: { posts: true } } } }),
+      prisma.mediaAsset.findMany({ orderBy: { uploadedAt: 'desc' }, ...(coreMode ? { take: 120 } : {}) }),
+      prisma.comment.findMany({ orderBy: { createdAt: 'desc' }, take: coreMode ? 40 : 100 }),
+      canAdmin ? prisma.user.findMany({ orderBy: { createdAt: 'desc' } }).then((rows) => rows.map(safeUser)) : Promise.resolve([]),
+      getSiteSettings(),
+      canAdmin
+        ? prisma.auditLog.findMany({ orderBy: { at: 'desc' }, take: 100 })
+        : Promise.resolve([]),
+      prisma.staticPage.findMany({ orderBy: { updatedAt: 'desc' }, ...(coreMode ? { take: 60 } : {}) }),
+      prisma.contactMessage.findMany({ orderBy: { createdAt: 'desc' }, take: coreMode ? 40 : 100 }),
+      canEdit
+        ? prisma.newsletterSubscriber.findMany({ orderBy: { createdAt: 'desc' }, take: 100 })
+        : Promise.resolve([]),
+      prisma.adPlacement.findMany({ orderBy: [{ placement: 'asc' }, { name: 'asc' }] }),
+      prisma.navigationItem.findMany({ orderBy: [{ location: 'asc' }, { position: 'asc' }] }),
+      prisma.analyticsSnapshot.findMany({ orderBy: { date: 'asc' } }),
+    ]);
+
+    ok(res, {
+      mode,
+      posts: posts.map(mapPost),
+      categories,
+      tags,
+      media: media.map(mapMedia),
+      comments,
+      users,
+      settings,
+      audit,
+      pages,
+      contactMessages,
+      newsletterSubscribers,
+      ads,
+      navigation,
+      analyticsSnapshots,
+    });
   }),
 );
 
@@ -659,7 +1058,7 @@ router.post(
       actorEmail: req.user!.email,
       action: 'AI_GENERATE_NEWS',
       resource: 'Post',
-      detail: `${body.provider}:${draft.model} — ${body.topic.slice(0, 100)}`,
+      detail: `${draft.provider}:${draft.model} - ${body.topic.slice(0, 100)}`,
       ip: req.ip,
     });
     ok(res, draft);
@@ -694,7 +1093,7 @@ router.post(
       detail: `${asset.provider}:${asset.model} - ${body.title.slice(0, 100)}`,
       ip: req.ip,
     });
-    ok(res, asset);
+    ok(res, mapMedia(asset));
   }),
 );
 
@@ -817,9 +1216,10 @@ router.get(
 router.get(
   '/admin/posts',
   requireRole('AUTHOR'),
-  validateQuery(paginationSchema.extend({ status: z.string().optional(), category: z.string().optional() })),
+  validateQuery(paginationSchema.extend({ status: z.string().optional(), category: z.string().optional(), summary: z.string().optional() })),
   asyncHandler(async (req, res) => {
-    const { page, limit, q, sort, status, category } = queryData(req);
+    const { page, limit, q, sort, status, category, summary } = queryData(req);
+    const summaryOnly = ['1', 'true', 'yes'].includes(String(summary ?? '').toLowerCase());
     const where: any = { deletedAt: null };
     if (status) where.status = status;
     if (category) where.category = { slug: category };
@@ -833,7 +1233,9 @@ router.get(
     const orderBy = sort === 'popular' ? { views: 'desc' as const } : { updatedAt: 'desc' as const };
     const [total, posts] = await Promise.all([
       prisma.post.count({ where }),
-      prisma.post.findMany({ where, include: postInclude, orderBy, skip: (page - 1) * limit, take: limit }),
+      summaryOnly
+        ? prisma.post.findMany({ where, select: adminPostSummarySelect, orderBy, skip: (page - 1) * limit, take: limit })
+        : prisma.post.findMany({ where, include: postInclude, orderBy, skip: (page - 1) * limit, take: limit }),
     ]);
     ok(res, posts.map(mapPost), { page, limit, total, totalPages: Math.ceil(total / limit) });
   }),
@@ -879,7 +1281,7 @@ router.post(
         authorId,
         categoryId: category.id,
         featuredImageId,
-        ...(tagCreates.length ? { tags: { createMany: { data: tagCreates } } } : {}),
+        ...(tagCreates.length ? { tags: { create: tagRelationCreateRows(tagCreates) } } : {}),
       },
       include: postInclude,
     });
@@ -947,7 +1349,7 @@ router.patch(
           categoryId: category?.id,
           authorId: req.body.authorId,
           ...statusDates,
-          ...(tagCreates?.length ? { tags: { createMany: { data: tagCreates } } } : {}),
+          ...(tagCreates?.length ? { tags: { create: tagRelationCreateRows(tagCreates) } } : {}),
           featuredImageId,
         },
         include: postInclude,
@@ -1055,7 +1457,10 @@ router.delete('/admin/tags/:id', requireRole('EDITOR'), asyncHandler(async (req,
   ok(res, { deleted: true });
 }));
 
-router.get('/admin/media', requireRole('AUTHOR'), asyncHandler(async (_req, res) => ok(res, await prisma.mediaAsset.findMany({ orderBy: { uploadedAt: 'desc' } }))));
+router.get('/admin/media', requireRole('AUTHOR'), asyncHandler(async (_req, res) => {
+  const rows = await prisma.mediaAsset.findMany({ orderBy: { uploadedAt: 'desc' } });
+  ok(res, rows.map(mapMedia));
+}));
 router.post('/admin/media/upload', requireRole('AUTHOR'), upload.single('file'), asyncHandler(async (req, res) => {
   const file = req.file;
   if (!file) badRequest('Upload a file.');
@@ -1084,7 +1489,7 @@ router.post('/admin/media/upload', requireRole('AUTHOR'), upload.single('file'),
     },
   });
   await writeAudit({ actorId: req.user!.id, actorEmail: req.user!.email, action: 'UPLOAD', resource: 'Media', resourceId: media.id, detail: media.name, ip: req.ip });
-  created(res, media);
+  created(res, mapMedia(media));
 }));
 router.post('/admin/media', requireRole('AUTHOR'), validateBody(mediaSchema), asyncHandler(async (req, res) => {
   const id = req.body.id || randomUUID();
@@ -1109,12 +1514,12 @@ router.post('/admin/media', requireRole('AUTHOR'), validateBody(mediaSchema), as
       uploaderId: req.user!.id,
     },
   });
-  created(res, media);
+  created(res, mapMedia(media));
 }));
 router.patch('/admin/media/:id', requireRole('AUTHOR'), validateBody(mediaSchema.partial()), asyncHandler(async (req, res) => {
   const media = await prisma.mediaAsset.update({ where: idParamSchema.parse(req.params), data: req.body }).catch(() => null);
   if (!media) notFound('Media asset not found.');
-  ok(res, media);
+  ok(res, mapMedia(media));
 }));
 router.delete('/admin/media/:id', requireRole('EDITOR'), asyncHandler(async (req, res) => {
   const media = await prisma.mediaAsset.findUnique({ where: idParamSchema.parse(req.params) });

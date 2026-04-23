@@ -190,7 +190,7 @@ model SiteSetting {
   tipsEmail              String   @default("tips@phulpur24.com")
   phone                  String   @default("")
   address                String   @default("") @db.Text
-  businessHours          String   @default("Mon-Fri 9am-6pm EST")
+  businessHours          String   @default("Sunday-Thursday 9am-6pm")
   officeLocations        String   @default("") @db.Text
   newsletterFromName     String   @default("Phulpur24 Team")
   newsletterFromEmail    String   @default("newsletter@phulpur24.com")

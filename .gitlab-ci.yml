@@ -2,12 +2,24 @@ stages:
   - verify
   - deploy
 
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "merge_request_event" || $CI_PIPELINE_SOURCE == "web"'
+      when: always
+    - when: never
+
 variables:
   NODE_VERSION: "22"
   VITE_API_BASE_URL: "/api"
 
 default:
   image: node:${NODE_VERSION}-bookworm-slim
+  interruptible: true
+  retry:
+    max: 1
+    when:
+      - runner_system_failure
+      - stuck_or_timeout_failure
   cache:
     key:
       files:
@@ -19,6 +31,9 @@ default:
 
 verify:
   stage: verify
+  rules:
+    - if: '$CI_COMMIT_BRANCH || $CI_MERGE_REQUEST_ID'
+      when: on_success
   script:
     - npm run api:typecheck
     - npm run build:public
@@ -26,6 +41,8 @@ verify:
 
 deploy_public_pages:
   stage: deploy
+  needs:
+    - verify
   rules:
     - if: '$CI_COMMIT_BRANCH == "main" && $CLOUDFLARE_API_TOKEN && $CLOUDFLARE_ACCOUNT_ID'
       when: manual
@@ -38,6 +55,8 @@ deploy_public_pages:
 
 deploy_admin_pages:
   stage: deploy
+  needs:
+    - verify
   rules:
     - if: '$CI_COMMIT_BRANCH == "main" && $CLOUDFLARE_API_TOKEN && $CLOUDFLARE_ACCOUNT_ID'
       when: manual
@@ -47,3 +66,123 @@ deploy_admin_pages:
   script:
     - npm run build:admin
     - npx wrangler@latest pages deploy dist --project-name phulpur-admin --branch main
+
+preflight_api_production:
+  stage: deploy
+  image: alpine:3.20
+  timeout: 10m
+  needs:
+    - verify
+  resource_group: production-api
+  before_script:
+    - apk add --no-cache openssh-client bash
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" && $PROD_SSH_HOST && $PROD_SSH_USER && $PROD_SSH_PRIVATE_KEY && $PROD_APP_DIR'
+      when: on_success
+  script:
+    - set -eu
+    - eval "$(ssh-agent -s)"
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - echo "$PROD_SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - |
+      if [ -n "${PROD_SSH_KNOWN_HOSTS:-}" ]; then
+        printf "%s\n" "$PROD_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+      else
+        ssh-keyscan -H "$PROD_SSH_HOST" > ~/.ssh/known_hosts
+      fi
+    - chmod 600 ~/.ssh/known_hosts
+    - export DEPLOY_TARGET="$PROD_SSH_USER@$PROD_SSH_HOST"
+    - export SSH_OPTS="-o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
+    - ssh $SSH_OPTS "$DEPLOY_TARGET" "set -eu; test -d '$PROD_APP_DIR'; test -w '$PROD_APP_DIR'; command -v npm >/dev/null; command -v node >/dev/null"
+    - ssh $SSH_OPTS "$DEPLOY_TARGET" "sudo -n systemctl is-active '${PROD_API_SERVICE:-phulpur-api.service}' >/dev/null || sudo -n systemctl status '${PROD_API_SERVICE:-phulpur-api.service}' --no-pager -n 5 >/dev/null"
+
+deploy_api_production:
+  stage: deploy
+  image: alpine:3.20
+  timeout: 30m
+  needs:
+    - verify
+    - preflight_api_production
+  resource_group: production-api
+  environment:
+    name: production/api
+    url: https://api.phulpur.net/api/health
+  variables:
+    PROD_API_HEALTHCHECK_URL: "https://api.phulpur.net/api/health"
+    PROD_HEALTHCHECK_RETRIES: "12"
+    PROD_HEALTHCHECK_SLEEP_SECONDS: "5"
+  before_script:
+    - apk add --no-cache openssh-client rsync bash curl
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" && $PROD_SSH_HOST && $PROD_SSH_USER && $PROD_SSH_PRIVATE_KEY && $PROD_APP_DIR'
+      when: on_success
+  script:
+    - set -eu
+    - eval "$(ssh-agent -s)"
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - echo "$PROD_SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - |
+      if [ -n "${PROD_SSH_KNOWN_HOSTS:-}" ]; then
+        printf "%s\n" "$PROD_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+      else
+        ssh-keyscan -H "$PROD_SSH_HOST" > ~/.ssh/known_hosts
+      fi
+    - chmod 600 ~/.ssh/known_hosts
+    - export DEPLOY_TARGET="$PROD_SSH_USER@$PROD_SSH_HOST"
+    - export SSH_OPTS="-o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
+    - ssh $SSH_OPTS "$DEPLOY_TARGET" "test -d '$PROD_APP_DIR' && test -w '$PROD_APP_DIR'"
+    - |
+      rsync -az --delete \
+        --exclude '.git' \
+        --exclude '.gitlab' \
+        --exclude '.ci' \
+        --exclude 'node_modules' \
+        --exclude 'dist' \
+        --exclude '.env' \
+        ./ "$DEPLOY_TARGET:$PROD_APP_DIR/"
+    - ssh $SSH_OPTS "$DEPLOY_TARGET" "PROD_APP_DIR='$PROD_APP_DIR' PROD_APP_USER='${PROD_APP_USER:-}' PROD_API_SERVICE='${PROD_API_SERVICE:-}' bash '$PROD_APP_DIR/scripts/deploy-api-server.sh'"
+    - |
+      for attempt in $(seq 1 "$PROD_HEALTHCHECK_RETRIES"); do
+        if curl -fsS "$PROD_API_HEALTHCHECK_URL" >/dev/null; then
+          echo "Production healthcheck passed on attempt $attempt"
+          exit 0
+        fi
+        echo "Healthcheck attempt $attempt failed"
+        sleep "$PROD_HEALTHCHECK_SLEEP_SECONDS"
+      done
+      echo "Production healthcheck failed after $PROD_HEALTHCHECK_RETRIES attempts" >&2
+      exit 1
+
+restart_api_production:
+  stage: deploy
+  image: alpine:3.20
+  timeout: 10m
+  needs: []
+  resource_group: production-api
+  environment:
+    name: production/api
+    url: https://api.phulpur.net/api/health
+  before_script:
+    - apk add --no-cache openssh-client curl
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" && $PROD_SSH_HOST && $PROD_SSH_USER && $PROD_SSH_PRIVATE_KEY'
+      when: manual
+  script:
+    - set -eu
+    - eval "$(ssh-agent -s)"
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - echo "$PROD_SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - |
+      if [ -n "${PROD_SSH_KNOWN_HOSTS:-}" ]; then
+        printf "%s\n" "$PROD_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+      else
+        ssh-keyscan -H "$PROD_SSH_HOST" > ~/.ssh/known_hosts
+      fi
+    - chmod 600 ~/.ssh/known_hosts
+    - export DEPLOY_TARGET="$PROD_SSH_USER@$PROD_SSH_HOST"
+    - export SSH_OPTS="-o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
+    - ssh $SSH_OPTS "$DEPLOY_TARGET" "sudo -n systemctl restart '${PROD_API_SERVICE:-phulpur-api.service}' && sudo -n systemctl is-active '${PROD_API_SERVICE:-phulpur-api.service}'"
+    - curl -fsS "${PROD_API_HEALTHCHECK_URL:-https://api.phulpur.net/api/health}" >/dev/null

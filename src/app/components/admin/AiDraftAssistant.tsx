@@ -61,7 +61,7 @@ export function AiDraftAssistant({ post, setPost }: Props) {
   const [language, setLanguage] = useState('en');
   const [audience, setAudience] = useState('');
   const [articleLength, setArticleLength] = useState<'brief' | 'standard' | 'in_depth'>('standard');
-  const [provider, setProvider] = useState<AiProvider>('openai');
+  const [provider, setProvider] = useState<AiProvider>('openrouter');
   const [modelOverride, setModelOverride] = useState('');
   const [applyMode, setApplyMode] = useState<ApplyMode>('full');
   const [loading, setLoading] = useState(false);
@@ -98,8 +98,8 @@ export function AiDraftAssistant({ post, setPost }: Props) {
       (provider === 'google' && caps.google) ||
       (provider === 'openrouter' && caps.openrouter);
     if (ready) return;
-    if (caps.openai) setProvider('openai');
-    else if (caps.openrouter) setProvider('openrouter');
+    if (caps.openrouter) setProvider('openrouter');
+    else if (caps.openai) setProvider('openai');
     else if (caps.anthropic) setProvider('anthropic');
     else if (caps.google) setProvider('google');
   }, [caps, provider]);
@@ -133,6 +133,17 @@ export function AiDraftAssistant({ post, setPost }: Props) {
     if (provider === 'openrouter') return caps.openrouter;
     return caps.google;
   }, [caps, provider]);
+
+  const isProviderConfigured = useCallback(
+    (value: AiProvider) => {
+      if (!caps) return providerReady;
+      if (value === 'openai') return caps.openai;
+      if (value === 'anthropic') return caps.anthropic;
+      if (value === 'openrouter') return caps.openrouter;
+      return caps.google;
+    },
+    [caps, providerReady],
+  );
 
   const categoryName = useMemo(
     () => state.categories.find((category) => category.slug === post.categorySlug)?.name ?? 'News',
@@ -194,7 +205,8 @@ export function AiDraftAssistant({ post, setPost }: Props) {
   const offerFeaturedImageGeneration = useCallback(
     async (draft: GeneratedNewsDraft) => {
       if (post.featuredImageId) return;
-      if (!providerReady) {
+      const imageProvider = draft.provider || provider;
+      if (!isProviderConfigured(imageProvider)) {
         toast.message('No configured AI provider is available for image generation. Publishing will still use the automatic fallback if needed.');
         return;
       }
@@ -210,7 +222,7 @@ export function AiDraftAssistant({ post, setPost }: Props) {
       try {
         const media = await withFreshToken((token) =>
           requestAiGeneratePostImage(token, {
-            provider,
+            provider: imageProvider,
             title: draft.title,
             excerpt: draft.excerpt,
             content: draft.content,
@@ -236,7 +248,7 @@ export function AiDraftAssistant({ post, setPost }: Props) {
         setImageLoading(false);
       }
     },
-    [categoryName, dispatch, post.featuredImageId, post.id, provider, providerReady, setPost, withFreshToken],
+    [categoryName, dispatch, isProviderConfigured, post.featuredImageId, post.id, provider, setPost, withFreshToken],
   );
 
   const onGenerate = async () => {
@@ -254,7 +266,7 @@ export function AiDraftAssistant({ post, setPost }: Props) {
     }
     if (hasSubstantialDraft(post)) {
       const okConfirm = window.confirm(
-        'This will merge generated content into your draft (per â€œApply modeâ€). Continue?',
+        'This will merge generated content into your draft (per "Apply mode"). Continue?',
       );
       if (!okConfirm) return;
     }
@@ -277,7 +289,7 @@ export function AiDraftAssistant({ post, setPost }: Props) {
       setLastDraft(draft);
       applyDraft(draft);
       await offerFeaturedImageGeneration(draft);
-      toast.success(`Draft applied (${draft.provider} Â· ${draft.model}). Review and edit before publishing.`);
+      toast.success(`Draft applied (${draft.provider} - ${draft.model}). Review and edit before publishing.`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'AI generation failed.';
       toast.error(msg);
@@ -482,7 +494,7 @@ export function AiDraftAssistant({ post, setPost }: Props) {
             onClick={() => setShowAdvanced((s) => !s)}
             className="text-xs font-semibold text-[#194890] hover:underline"
           >
-            {showAdvanced ? 'Hide' : 'Show'} advanced â€” model override
+            {showAdvanced ? 'Hide' : 'Show'} advanced - model override
           </button>
           {showAdvanced && (
             <input
@@ -511,10 +523,10 @@ export function AiDraftAssistant({ post, setPost }: Props) {
             <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-2 text-sm text-emerald-950 space-y-1">
               <p className="font-semibold flex items-center gap-2">
                 <BookOpen size={16} />
-                Last run: {lastDraft.provider} Â· {lastDraft.model}
+                Last run: {lastDraft.provider} - {lastDraft.model}
               </p>
               <p className="text-xs text-emerald-900/90">
-                ~{wordCount(lastDraft.content)} words Â· {lastDraft.readTime}
+                ~{wordCount(lastDraft.content)} words - {lastDraft.readTime}
               </p>
               {lastDraft.seoChecklist?.length > 0 && (
                 <ul className="grid gap-1 pt-2 text-xs text-emerald-900/90 sm:grid-cols-2">

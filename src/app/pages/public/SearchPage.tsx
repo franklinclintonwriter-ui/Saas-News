@@ -113,7 +113,7 @@ export default function SearchPage() {
         const params = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
         if (activeQuery.trim()) params.set('q', activeQuery.trim());
         if (category !== 'all') params.set('category', category);
-        if (sort === 'popular') params.set('sort', 'popular');
+        if (sort !== 'relevance') params.set('sort', sort);
         if (dateRange !== 'all') params.set('date', dateRange);
         const response = await apiRequestWithMeta<ApiSearchPost[]>(`/public/posts?${params.toString()}`);
         const meta = (response.meta ?? {}) as SearchMeta;
