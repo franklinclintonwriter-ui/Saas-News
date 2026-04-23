@@ -16,6 +16,9 @@ function readList(name: string, fallback: string[]): string[] {
     .filter(Boolean);
 }
 
+const nodeEnv = process.env.NODE_ENV ?? 'development';
+const isProduction = nodeEnv === 'production';
+
 const devAccessSecret = 'development-access-secret-change-before-production-32';
 const devRefreshSecret = 'development-refresh-secret-change-before-production-32';
 const devCorsOrigins = [
@@ -26,6 +29,20 @@ const devCorsOrigins = [
 ];
 
 const port = readNumber('API_PORT', 4102);
+
+function resolveCorsOrigins(): string[] {
+  const raw = process.env.CORS_ORIGIN?.trim();
+  if (raw) {
+    return raw
+      .split(',')
+      .map((item) => item.trim().replace(/\/+$/, ''))
+      .filter(Boolean);
+  }
+  if (isProduction) {
+    throw new Error('CORS_ORIGIN must be set in production (comma-separated allowlist).');
+  }
+  return devCorsOrigins;
+}
 
 function trimTrailingSlash(value: string): string {
   return value.trim().replace(/\/+$/, '');
@@ -67,10 +84,11 @@ function normalizeR2Endpoint(raw: string | undefined, bucket: string): string {
 const r2Bucket = process.env.R2_BUCKET?.trim() || '';
 
 export const config = {
-  nodeEnv: process.env.NODE_ENV ?? 'development',
+  nodeEnv,
   port,
   apiPublicUrl: normalizeApiPublicUrl(process.env.API_PUBLIC_URL, port),
-  corsOrigins: readList('CORS_ORIGIN', devCorsOrigins),
+  corsOrigins: resolveCorsOrigins(),
+  publicSiteUrl: process.env.PUBLIC_SITE_URL?.trim() || '',
   jwtSecret: process.env.JWT_SECRET ?? devAccessSecret,
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET ?? devRefreshSecret,
   accessTokenTtl: process.env.ACCESS_TOKEN_TTL ?? '15m',
@@ -101,8 +119,8 @@ export const config = {
   anthropicModel: process.env.ANTHROPIC_MODEL?.trim() || 'claude-3-5-haiku-latest',
   googleGeminiModel: process.env.GEMINI_MODEL?.trim() || 'gemini-2.0-flash',
   openrouterModel: process.env.OPENROUTER_MODEL?.trim() || 'openai/gpt-4o-mini',
-  openrouterSiteUrl: process.env.OPENROUTER_SITE_URL?.trim() || 'http://127.0.0.1:5174',
-  openrouterAppName: process.env.OPENROUTER_APP_NAME?.trim() || 'Phulpur24',
+  openrouterSiteUrl: process.env.OPENROUTER_SITE_URL?.trim() || process.env.PUBLIC_SITE_URL?.trim() || '',
+  openrouterAppName: process.env.OPENROUTER_APP_NAME?.trim() || '',
   aiRequestTimeoutMs: readNumber('AI_REQUEST_TIMEOUT_MS', 120_000),
 };
 
@@ -113,7 +131,23 @@ if (config.nodeEnv === 'production') {
     ['INTEGRATION_SECRET_KEY', config.integrationSecretKey],
   ] as const) {
     if (value.length < 32 || value.startsWith('development-')) {
-      throw new Error(`${name} must be set to a strong production secret.`);
+      throw new Error(`${name} must be set to a strong production secret (>=32 chars).`);
+    }
+  }
+  const required: Array<[string, string]> = [
+    ['PUBLIC_SITE_URL', config.publicSiteUrl],
+    ['API_PUBLIC_URL', config.apiPublicUrl],
+    ['DATABASE_URL', process.env.DATABASE_URL?.trim() || ''],
+  ];
+  for (const [name, value] of required) {
+    if (!value) throw new Error(`${name} must be set in production.`);
+  }
+  if (!config.corsOrigins.length) {
+    throw new Error('CORS_ORIGIN must list at least one production origin.');
+  }
+  for (const origin of config.corsOrigins) {
+    if (/127\.0\.0\.1|localhost/.test(origin)) {
+      throw new Error(`CORS_ORIGIN contains dev-only origin "${origin}" in production.`);
     }
   }
 }

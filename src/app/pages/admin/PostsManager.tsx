@@ -108,18 +108,20 @@ export default function PostsManager() {
   };
 
   return (
-    <div>
-      <div className="mb-6 flex flex-wrap items-center gap-4 md:mb-8">
-        {!canBulkManagePosts ? <p className="text-xs font-semibold text-[#92400E]">Bulk publish and delete are editor-only</p> : null}
-        {canCreatePosts ? (
-          <Link
-            to="/admin/posts/new"
-            className="inline-flex items-center gap-2 whitespace-nowrap rounded-lg bg-[#194890] px-6 py-3 font-semibold text-white transition hover:bg-[#2656A8] ml-auto"
-          >
-            <Plus size={20} />
-            New Post
-          </Link>
-        ) : null}
+    <div className="space-y-6">
+      <div className="rounded-xl border border-[#E5E7EB] bg-white px-4 py-4 md:px-6 md:py-5">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          {canCreatePosts ? (
+            <Link
+              to="/admin/posts/new"
+              className="inline-flex items-center gap-2 whitespace-nowrap rounded-lg bg-[#194890] px-6 py-3 font-semibold text-white transition hover:bg-[#2656A8]"
+            >
+              <Plus size={20} />
+              New Post
+            </Link>
+          ) : null}
+          {!canBulkManagePosts ? <span className="inline-flex rounded-full border border-[#FDE68A] bg-[#FEF3C7] px-3 py-1 text-xs font-semibold text-[#92400E]">Read-only actions</span> : null}
+        </div>
       </div>
 
       {canBulkManagePosts && selected.size > 0 && (
@@ -165,7 +167,7 @@ export default function PostsManager() {
         </div>
       )}
 
-      <div className="overflow-hidden rounded-lg border border-[#E5E7EB] bg-white dark:border-border dark:bg-card">
+      <div className="overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-sm dark:border-border dark:bg-card">
         <div className="border-b border-[#E5E7EB] p-4 md:p-6 dark:border-border">
           <div className="flex flex-col items-stretch gap-3 md:flex-row md:items-center md:gap-4">
             <div className="relative flex-1">
@@ -433,7 +435,7 @@ export default function PostsManager() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this post?</AlertDialogTitle>
             <AlertDialogDescription>
-              This removes the post and its linked comments from the workspace dataset. You can reset the demo from Settings.
+              This removes the post and its linked comments from the workspace dataset.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -130,8 +130,13 @@ export default function Tags() {
   const totalTagged = state.posts.reduce((acc, p) => acc + p.tags.length, 0);
 
   return (
-    <div>
-      <div className="mb-6 flex flex-wrap items-center gap-4 md:mb-8">
+    <div className="space-y-6">
+      <div className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm md:p-6">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <span className="inline-flex rounded-full bg-[#F3F4F6] px-3 py-1.5 text-xs font-semibold text-[#374151]">{state.tags.length} total</span>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-4">
         {!canDeleteOrMerge ? <p className="text-xs font-semibold text-[#92400E]">Delete and merge actions are editor-only</p> : null}
         <Button onClick={openCreate} className="bg-[#194890] hover:bg-[#2656A8] font-semibold ml-auto">
           <Plus size={20} className="mr-2" />
@@ -139,7 +144,7 @@ export default function Tags() {
         </Button>
       </div>
 
-      <div className="bg-white rounded-lg border border-[#E5E7EB] overflow-hidden mb-6">
+      <div className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm sm:p-6">
         <div className="p-4 md:p-6 border-b border-[#E5E7EB]">
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="flex-1 relative">

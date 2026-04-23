@@ -1,7 +1,6 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
-import { apiRequest } from '../lib/api-client';
-
-const STORAGE_KEY = 'phulpur24_admin_session';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import type { Session } from '@supabase/supabase-js';
+import { getSupabase, sessionRole, supabaseConfigured } from '../lib/auth/supabase-client';
 
 export type AuthUser = {
   id: string;
@@ -11,23 +10,6 @@ export type AuthUser = {
   status: string;
   signedInAt: string;
 };
-
-type AuthSession = {
-  user: AuthUser;
-  accessToken: string;
-  refreshToken: string;
-};
-
-function readSession(): AuthSession | null {
-  try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as AuthSession;
-    return parsed?.user?.email && parsed.accessToken ? parsed : null;
-  } catch {
-    return null;
-  }
-}
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -39,83 +21,81 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+function userFromSession(s: Session | null): AuthUser | null {
+  if (!s?.user) return null;
+  const role = sessionRole(s as unknown as { user?: { app_metadata?: { role?: string } } }) ?? 'AUTHOR';
+  const meta = s.user.user_metadata ?? {};
+  return {
+    id: s.user.id,
+    email: s.user.email ?? '',
+    name: (meta.name as string | undefined) || (s.user.email?.split('@')[0] ?? ''),
+    role,
+    status: 'ACTIVE',
+    signedInAt: new Date().toISOString(),
+  };
+}
+
 const emailOk = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<AuthSession | null>(() => readSession());
+  const [session, setSession] = useState<Session | null>(null);
+  const [ready, setReady] = useState(false);
 
-  const storeSession = useCallback((next: AuthSession | null) => {
-    if (next) {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    } else {
-      sessionStorage.removeItem(STORAGE_KEY);
-    }
-    setSession(next);
+  useEffect(() => {
+    if (!supabaseConfigured()) { setReady(true); return; }
+    const supabase = getSupabase();
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session ?? null);
+      setReady(true);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
+      setSession(next ?? null);
+    });
+    return () => sub.subscription.unsubscribe();
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
     const trimmed = email.trim();
-    if (!emailOk(trimmed)) {
-      return { ok: false as const, message: 'Enter a valid work email address.' };
-    }
-    if (password.length < 8) {
-      return { ok: false as const, message: 'Password must be at least 8 characters.' };
-    }
+    if (!emailOk(trimmed)) return { ok: false as const, message: 'Enter a valid email address.' };
+    if (password.length < 8) return { ok: false as const, message: 'Password must be at least 8 characters.' };
+    if (!supabaseConfigured()) return { ok: false as const, message: 'Auth is not configured.' };
     try {
-      const result = await apiRequest<{ user: Omit<AuthUser, 'signedInAt'>; accessToken: string; refreshToken: string }>('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ email: trimmed, password }),
-      });
-      const next: AuthSession = {
-        user: { ...result.user, signedInAt: new Date().toISOString() },
-        accessToken: result.accessToken,
-        refreshToken: result.refreshToken,
-      };
-      storeSession(next);
+      const { data, error } = await getSupabase().auth.signInWithPassword({ email: trimmed, password });
+      if (error || !data.session) return { ok: false as const, message: error?.message || 'Sign-in failed.' };
+      setSession(data.session);
       return { ok: true as const };
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unable to sign in.';
-      return { ok: false as const, message };
+      return { ok: false as const, message: err instanceof Error ? err.message : 'Unable to sign in.' };
     }
-  }, [storeSession]);
+  }, []);
 
   const refreshSession = useCallback(async () => {
-    const current = readSession();
-    if (!current?.refreshToken) return null;
-
+    if (!supabaseConfigured()) return null;
     try {
-      const result = await apiRequest<{ user: Omit<AuthUser, 'signedInAt'>; accessToken: string; refreshToken: string }>('/auth/refresh', {
-        method: 'POST',
-        body: JSON.stringify({ refreshToken: current.refreshToken }),
-      });
-      const next: AuthSession = {
-        user: { ...result.user, signedInAt: current.user.signedInAt || new Date().toISOString() },
-        accessToken: result.accessToken,
-        refreshToken: result.refreshToken,
-      };
-      storeSession(next);
-      return next.accessToken;
-    } catch {
-      storeSession(null);
-      return null;
-    }
-  }, [storeSession]);
+      const { data, error } = await getSupabase().auth.refreshSession();
+      if (error || !data.session) return null;
+      setSession(data.session);
+      return data.session.access_token;
+    } catch { return null; }
+  }, []);
 
   const signOut = useCallback(() => {
-    const current = readSession();
-    if (current?.refreshToken) {
-      void apiRequest('/auth/logout', {
-        method: 'POST',
-        body: JSON.stringify({ refreshToken: current.refreshToken }),
-      }).catch(() => undefined);
-    }
-    storeSession(null);
-  }, [storeSession]);
+    if (supabaseConfigured()) void getSupabase().auth.signOut();
+    setSession(null);
+  }, []);
 
-  const value = useMemo(
-    () => ({ user: session?.user ?? null, accessToken: session?.accessToken ?? null, refreshSession, signIn, signOut }),
-    [session, refreshSession, signIn, signOut],
+  const user = userFromSession(session);
+  const accessToken = session?.access_token ?? null;
+
+  const value = useMemo<AuthContextValue>(
+    () => ({ user, accessToken, refreshSession, signIn, signOut }),
+    [user, accessToken, refreshSession, signIn, signOut],
   );
+
+  if (!ready) {
+    // Render nothing until we know session state; avoids flash-of-login.
+    return null;
+  }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

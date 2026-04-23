@@ -165,7 +165,7 @@ export default function HomePage() {
                   <div className="w-24 h-24 bg-[#E5E7EB] rounded flex-shrink-0 overflow-hidden">
                     {(() => {
                       const url = imageByPostId.get(news.id);
-                      return url ? <img src={url} alt="" className="w-full h-full object-cover" /> : null;
+                      return url ? <img src={url} alt={news.title} loading="lazy" decoding="async" className="w-full h-full object-cover" /> : null;
                     })()}
                   </div>
                   <div>
@@ -201,7 +201,7 @@ export default function HomePage() {
                   <div className="w-full h-32 bg-[#E5E7EB] rounded mb-3 overflow-hidden">
                     {(() => {
                       const url = imageByPostId.get(news.id);
-                      return url ? <img src={url} alt="" className="w-full h-full object-cover" /> : null;
+                      return url ? <img src={url} alt={news.title} loading="lazy" decoding="async" className="w-full h-full object-cover" /> : null;
                     })()}
                   </div>
                   <span className="text-xs text-[#194890] font-semibold">{news.category}</span>
@@ -301,7 +301,7 @@ export default function HomePage() {
                   <div className="h-64 bg-[#E5E7EB] sm:h-72 lg:h-80 overflow-hidden">
                     {(() => {
                       const url = imageByPostId.get(focusSection.hero!.id);
-                      return url ? <img src={url} alt="" className="w-full h-full object-cover" /> : null;
+                      return url ? <img src={url} alt={focusSection.hero!.title} loading="lazy" decoding="async" className="w-full h-full object-cover" /> : null;
                     })()}
                   </div>
                   <div className="p-6">
@@ -320,7 +320,7 @@ export default function HomePage() {
                   <div className="w-20 h-20 bg-[#E5E7EB] rounded flex-shrink-0 overflow-hidden">
                     {(() => {
                       const url = imageByPostId.get(news.id);
-                      return url ? <img src={url} alt="" className="w-full h-full object-cover" /> : null;
+                      return url ? <img src={url} alt={news.title} loading="lazy" decoding="async" className="w-full h-full object-cover" /> : null;
                     })()}
                   </div>
                   <div>
@@ -342,7 +342,7 @@ export default function HomePage() {
               <Link key={item.id} to={`/article/${item.id}`} className="block bg-[#F3F4F6] rounded-lg overflow-hidden group hover:shadow-md transition">
                 <div className="relative h-48 bg-[#111827] overflow-hidden">
                   {imageUrl ? (
-                    <img src={imageUrl} alt={item.title} className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
+                    <img src={imageUrl} alt={item.title} loading="lazy" decoding="async" className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
                   ) : (
                     <div className="h-full w-full bg-[#E5E7EB]" />
                   )}

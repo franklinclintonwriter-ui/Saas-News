@@ -8,7 +8,7 @@ import { useAuth } from '../../context/auth-context';
 import type { AdminMedia, SiteSettings } from '../../lib/admin/cms-state';
 import { saveAdminSettings, uploadAdminMediaFile } from '../../lib/api-cms';
 import { API_BASE_URL, ApiClientError } from '../../lib/api-client';
-import { shareArticleMetaUrl } from '../../lib/share-links';
+import { shareArticleMetaUrl, mediaFileUrl } from '../../lib/share-links';
 import { Button } from '../../components/ui/button';
 import {
   AlertDialog,
@@ -219,7 +219,7 @@ export default function Settings() {
   const selectedShareDescription =
     selectedSharePost?.metaDescription?.trim() || selectedSharePost?.excerpt || draft.defaultMetaDescription || draft.tagline;
   const selectedShareImage = selectedSharePost?.featuredImageId
-    ? `${apiRootFromBase(API_BASE_URL)}/media/${selectedSharePost.featuredImageId}/file`
+    ? mediaFileUrl(API_BASE_URL, selectedSharePost.featuredImageId)
     : previewImage;
   const shareMetaUrl = activeShareSlug ? shareArticleMetaUrl(API_BASE_URL, activeShareSlug) : '';
   const shareDebugLinks = {
@@ -605,14 +605,18 @@ export default function Settings() {
   const showPreviewFooterTitle = draft.showFooterSiteTitle || !showPreviewFooterLogo;
 
   return (
-    <div>
-      <div className="mb-6 flex flex-wrap items-center justify-end gap-3 md:mb-8">
-        <Button asChild variant="outline">
-          <Link to="/admin/api-config">
-            <KeyRound size={18} className="mr-2" />
-            API Config
-          </Link>
-        </Button>
+    <div className="space-y-6">
+      <div className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm md:p-6">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button asChild variant="outline">
+            <Link to="/admin/api-config">
+              <KeyRound size={18} className="mr-2" />
+              API Config
+            </Link>
+          </Button>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <Button onClick={() => void save()} disabled={saving} className="bg-[#194890] font-semibold hover:bg-[#2656A8]">
           <Save size={20} className="mr-2" />
           {saving ? 'Saving...' : 'Save Changes'}

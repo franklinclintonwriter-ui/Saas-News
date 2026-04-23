@@ -1,0 +1,49 @@
+/* Accessibility layer — included last so it overrides framework defaults. */
+
+/* Respect the user's motion preference. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Ensure every focusable element has a visible, high-contrast ring. Tailwind's
+ * default focus-visible ring sometimes gets stripped by component libraries;
+ * this guarantees a baseline for keyboard users. */
+:where(a, button, [role='button'], [role='link'], input, select, textarea, [tabindex]:not([tabindex='-1']))
+  :where(:focus-visible) {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Honor forced-colors (Windows High Contrast). */
+@media (forced-colors: active) {
+  button,
+  a,
+  [role='button'] {
+    border: 1px solid ButtonText;
+  }
+  :focus-visible {
+    outline: 2px solid Highlight !important;
+  }
+}
+
+/* Make sure visually-hidden is consistent across the app (shadcn uses .sr-only
+ * but we sometimes render into raw HTML). */
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}

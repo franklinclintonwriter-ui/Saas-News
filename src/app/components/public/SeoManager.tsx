@@ -5,8 +5,7 @@ import type { SiteSettings } from '../../lib/admin/cms-state';
 import { categoryLabelForSlug, resolveArticle } from '../../lib/public-content';
 
 const FALLBACK_FAVICON = '/favicon.svg';
-const FALLBACK_KEYWORDS = 'Phulpur news, Mymensingh updates, Bangladesh local news, verified journalism, Phulpur24';
-const GOOGLE_SITE_VERIFICATION_FALLBACK = 'Scecq8dllrg_egJpIykwEbTZbz2ymYg9JO_eC6NwFOA';
+const FALLBACK_KEYWORDS = '';
 
 function trimSlash(value: string): string {
   return value.replace(/\/+$/, '');
@@ -231,7 +230,7 @@ export default function SeoManager() {
     setMeta('meta[name="msapplication-TileColor"]', { name: 'msapplication-TileColor' }, settings.primaryColor);
     setMeta('meta[name="apple-mobile-web-app-title"]', { name: 'apple-mobile-web-app-title' }, settings.siteTitle);
 
-    const googleVerification = settings.googleSiteVerification.trim() || GOOGLE_SITE_VERIFICATION_FALLBACK;
+    const googleVerification = settings.googleSiteVerification.trim();
     setMeta('meta[name="google-site-verification"]', { name: 'google-site-verification' }, googleVerification);
     if (settings.bingSiteVerification) {
       setMeta('meta[name="msvalidate.01"]', { name: 'msvalidate.01' }, settings.bingSiteVerification);

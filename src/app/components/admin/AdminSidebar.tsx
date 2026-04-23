@@ -32,7 +32,7 @@ type MenuItem = {
   minRole?: AdminRole;
 };
 
-const menuSections = [
+const menuSections: { title: string; items: MenuItem[] }[] = [
   {
     title: 'Command Center',
     items: [

@@ -212,8 +212,13 @@ export default function Users() {
   };
 
   return (
-    <div>
-      <div className="mb-6 flex flex-wrap items-center justify-end gap-4 md:mb-8">
+    <div className="space-y-6">
+      <div className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm md:p-6">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <span className="inline-flex rounded-lg bg-[#F3F4F6] px-3 py-2 text-sm font-semibold text-[#374151]">{filtered.length} filtered</span>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <Button onClick={openAdd} className="bg-[#194890] hover:bg-[#2656A8] font-semibold">
           <Plus size={20} className="mr-2" />
           Add User
@@ -235,7 +240,7 @@ export default function Users() {
         })}
       </div>
 
-      <div className="bg-white rounded-lg border border-[#E5E7EB] overflow-hidden">
+      <div className="rounded-xl border border-[#E5E7EB] bg-white shadow-sm overflow-hidden">
         <div className="p-4 md:p-6 border-b border-[#E5E7EB]">
           <div className="flex flex-col md:flex-row gap-3">
             <div className="flex-1 relative">

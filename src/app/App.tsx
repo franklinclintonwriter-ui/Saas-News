@@ -4,9 +4,14 @@ import { AuthProvider } from './context/auth-context';
 import { CmsProvider } from './context/cms-context';
 import { ThemeProvider } from './context/theme-context';
 import { AppToaster } from './components/AppToaster';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { RequireAdminAuth } from './components/auth/RequireAdminAuth';
 import PublicLayout from './layouts/PublicLayout';
 import AdminLayout from './layouts/AdminLayout';
+import LoginPage from './pages/public/LoginPage';
+import Dashboard from './pages/admin/Dashboard';
+import PostsManager from './pages/admin/PostsManager';
+import PostEditor from './pages/admin/PostEditor';
 
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
@@ -63,10 +68,10 @@ const publicPages = publicEnabled
 
 const adminPages = adminEnabled
   ? {
-      LoginPage: lazy(() => import('./pages/public/LoginPage')),
-      Dashboard: lazy(() => import('./pages/admin/Dashboard')),
-      PostsManager: lazy(() => import('./pages/admin/PostsManager')),
-      PostEditor: lazy(() => import('./pages/admin/PostEditor')),
+  LoginPage,
+      Dashboard,
+      PostsManager,
+      PostEditor,
       PostPreview: lazy(() => import('./pages/admin/PostPreview')),
       MediaLibrary: lazy(() => import('./pages/admin/MediaLibrary')),
       Settings: lazy(() => import('./pages/admin/Settings')),
@@ -161,7 +166,14 @@ function renderPublicRoutes() {
   } = publicPages;
 
   return (
-    <Route path="/" element={<PublicLayout />}>
+    <Route
+      path="/"
+      element={
+        <ErrorBoundary boundary="public-layout">
+          <PublicLayout />
+        </ErrorBoundary>
+      }
+    >
       <Route index element={<HomePage />} />
       <Route path="article/:id" element={<ArticlePage />} />
       <Route path="category/:slug" element={<CategoryPage />} />

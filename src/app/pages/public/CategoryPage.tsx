@@ -65,7 +65,7 @@ export default function CategoryPage() {
                 {featured ? (
                   (() => {
                     const url = imageByPostId.get(featured.id);
-                    return url ? <img src={url} alt="" className="h-full w-full object-cover" /> : null;
+                    return url ? <img src={url} alt={featured.title} loading="lazy" decoding="async" className="h-full w-full object-cover" /> : null;
                   })()
                 ) : null}
               </div>

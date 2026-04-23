@@ -7,7 +7,6 @@ import { ArticleMarkdown } from '../../components/articles/ArticleMarkdown';
 import { categoryLabelForSlug } from '../../lib/public-content';
 import { formatRelative, type AdminPost } from '../../lib/admin/cms-state';
 import { fetchAdminPostDetail, isExpiredAuthError } from '../../lib/api-cms';
-import { generatedPostImageDataUrl } from '../../lib/generated-post-image';
 
 const PREVIEW_KEY_PREFIX = 'phulpur24_post_preview_';
 
@@ -103,7 +102,7 @@ export default function PostPreview() {
 
   const categoryLabel = categoryLabelForSlug(state, post.categorySlug);
   const featuredImage = post.featuredImageId ? state.media.find((media) => media.id === post.featuredImageId) : null;
-  const heroUrl = featuredImage?.url || generatedPostImageDataUrl(post.title || 'Untitled story', categoryLabel, post.id);
+  const heroUrl = featuredImage?.url ?? null;
   const author = post.authorProfile?.name || post.author || 'Editor';
 
   return (
@@ -129,7 +128,7 @@ export default function PostPreview() {
       <div className="bg-[#F3F4F6] py-8">
         <div className="mx-auto max-w-[1440px] px-4">
           <span className="mb-4 inline-block rounded bg-[#194890] px-3 py-1 text-sm text-white">{categoryLabel}</span>
-          <h1 className="mb-4 max-w-4xl text-3xl font-bold md:text-5xl">{post.title || 'Untitled story'}</h1>
+          <h1 className="mb-4 max-w-4xl text-3xl font-bold md:text-5xl">{post.title || 'Untitled draft'}</h1>
           <p className="mb-6 max-w-3xl text-base text-[#6B7280] md:text-xl">{post.excerpt || post.metaDescription || 'Preview excerpt will appear here.'}</p>
           <div className="flex flex-wrap items-center gap-3 text-sm md:gap-6">
             <span className="flex items-center gap-2">
@@ -147,9 +146,11 @@ export default function PostPreview() {
 
       <main className="mx-auto max-w-[1440px] px-4 py-10">
         <div className="mx-auto max-w-4xl">
-          <div className="mb-8 h-[320px] w-full overflow-hidden rounded-lg bg-[#E5E7EB] md:h-[480px]">
-            <img src={heroUrl} alt="" className="h-full w-full object-cover" />
-          </div>
+          {heroUrl ? (
+            <div className="mb-8 h-[320px] w-full overflow-hidden rounded-lg bg-[#E5E7EB] md:h-[480px]">
+              <img src={heroUrl} alt="" className="h-full w-full object-cover" />
+            </div>
+          ) : null}
           <ArticleMarkdown content={post.content || 'Start writing your article body to preview it here.'} variant="admin" />
         </div>
       </main>

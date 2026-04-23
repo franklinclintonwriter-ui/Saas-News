@@ -17,6 +17,40 @@ export type AiCapabilities = {
   };
 };
 
+const EMPTY_AI_CAPABILITIES: AiCapabilities = {
+  openai: false,
+  anthropic: false,
+  google: false,
+  openrouter: false,
+  defaults: {
+    openai: '',
+    anthropic: '',
+    google: '',
+    openrouter: '',
+    openaiImage: '',
+  },
+};
+
+function normalizeAiCapabilities(value: unknown): AiCapabilities {
+  if (!value || typeof value !== 'object') return EMPTY_AI_CAPABILITIES;
+  const raw = value as Partial<AiCapabilities> & {
+    defaults?: Partial<AiCapabilities['defaults']>;
+  };
+  return {
+    openai: Boolean(raw.openai),
+    anthropic: Boolean(raw.anthropic),
+    google: Boolean(raw.google),
+    openrouter: Boolean(raw.openrouter),
+    defaults: {
+      openai: raw.defaults?.openai ?? '',
+      anthropic: raw.defaults?.anthropic ?? '',
+      google: raw.defaults?.google ?? '',
+      openrouter: raw.defaults?.openrouter ?? '',
+      openaiImage: raw.defaults?.openaiImage ?? '',
+    },
+  };
+}
+
 export type AiNewsTone =
   | 'neutral'
   | 'analytical'
@@ -76,7 +110,8 @@ export type GeneratedPostImageAsset = AdminMedia & {
 };
 
 export async function fetchAiCapabilities(accessToken: string): Promise<AiCapabilities> {
-  return apiRequest<AiCapabilities>('/admin/ai/capabilities', { token: accessToken });
+  const payload = await apiRequest<unknown>('/admin/ai/capabilities', { token: accessToken });
+  return normalizeAiCapabilities(payload);
 }
 
 export async function requestAiGenerateNews(accessToken: string, body: AiGenerateNewsBody): Promise<GeneratedNewsDraft> {

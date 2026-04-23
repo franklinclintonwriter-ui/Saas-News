@@ -222,9 +222,9 @@ export default function ArticlePage() {
       <div className="max-w-[1440px] mx-auto px-4 py-8 md:py-12 pb-16">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 md:gap-12">
           <div className="lg:col-span-3">
-            <div className="w-full h-[320px] md:h-[480px] bg-[#E5E7EB] rounded-lg mb-8 overflow-hidden" role="img" aria-label="Article hero">
+            <div className="w-full h-[320px] md:h-[480px] bg-[#E5E7EB] rounded-lg mb-8 overflow-hidden">
               {heroUrl ? (
-                <img src={heroUrl} alt="" className="w-full h-full object-cover" />
+                <img src={heroUrl} alt={article.title} loading="eager" fetchPriority="high" decoding="async" className="w-full h-full object-cover" />
               ) : null}
             </div>
 
@@ -249,7 +249,7 @@ export default function ArticlePage() {
               <div className="flex items-start gap-4">
                 <div className="w-20 h-20 bg-[#E8EEF8] text-[#194890] rounded-full flex-shrink-0 overflow-hidden flex items-center justify-center text-xl font-bold" aria-hidden>
                   {authorProfile?.avatarUrl ? (
-                    <img src={authorProfile.avatarUrl} alt="" className="h-full w-full object-cover" />
+                    <img src={authorProfile.avatarUrl} alt={`${authorName} avatar`} loading="lazy" decoding="async" className="h-full w-full object-cover" />
                   ) : (
                     initials(authorName)
                   )}
@@ -327,8 +327,8 @@ export default function ArticlePage() {
                       to={`/article/${rel.id}`}
                       className="border border-[#E5E7EB] rounded-lg overflow-hidden hover:shadow-md transition block"
                     >
-                      <div className="h-40 bg-[#E5E7EB] overflow-hidden" aria-hidden>
-                        {rel.imageUrl ? <img src={rel.imageUrl} alt="" className="h-full w-full object-cover" /> : null}
+                      <div className="h-40 bg-[#E5E7EB] overflow-hidden">
+                        {rel.imageUrl ? <img src={rel.imageUrl} alt={rel.title} loading="lazy" decoding="async" className="h-full w-full object-cover" /> : null}
                       </div>
                       <div className="p-4">
                         <span className="text-xs text-[#194890] font-semibold">{rel.category}</span>
@@ -351,7 +351,7 @@ export default function ArticlePage() {
                   id="comment-body"
                   placeholder="Share your thoughts..."
                   className="w-full px-4 py-3 border border-[#E5E7EB] rounded-lg mb-3 min-h-32 bg-white"
-                  aria-invalid={errors.body ? 'true' : 'false'}
+                  aria-invalid={!!errors.body}
                   {...register('body', { required: 'Please enter a comment.', minLength: { value: 10, message: 'Comment should be at least 10 characters.' } })}
                 />
                 {errors.body && <p className="text-sm text-red-600 mb-2">{errors.body.message}</p>}

@@ -26,4 +26,3 @@ export function extractHeadingsFromMarkdown(content: string, levels: number[] = 
   }
   return headings;
 }
-

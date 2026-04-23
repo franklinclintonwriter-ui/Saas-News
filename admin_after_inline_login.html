@@ -1,0 +1,44 @@
+﻿
+  <!DOCTYPE html>
+  <html lang="en">
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+      <meta http-equiv="Pragma" content="no-cache" />
+      <meta http-equiv="Expires" content="0" />
+      <meta name="robots" content="noarchive" />
+      <script type="speculationrules">{"prefetch":[{"source":"list","urls":[]}]}</script>
+      <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+      <link rel="shortcut icon" href="/favicon.svg" />
+      <link rel="apple-touch-icon" href="/favicon.svg" />
+      <meta name="application-name" content="Phulpur24" />
+      <meta name="apple-mobile-web-app-capable" content="yes" />
+      <meta name="mobile-web-app-capable" content="yes" />
+      <title>Phulpur24</title>
+      <script>
+        (() => {
+          try {
+            const mode = localStorage.getItem('phulpur24_theme_mode') || 'system';
+            const isDark = mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            document.documentElement.classList.toggle('dark', isDark);
+            document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
+            document.documentElement.dataset.themeMode = mode;
+            document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+          } catch {
+            document.documentElement.dataset.themeMode = 'system';
+          }
+        })();
+      </script>
+      <style>html, body { height: 100%; margin: 0; } #root { height: 100%; }</style>
+      <script type="module" crossorigin src="/assets/index-LL4C3qHP.js"></script>
+      <link rel="stylesheet" crossorigin href="/assets/index-Cc1KbPwK.css">
+    </head>
+
+    <body>
+      <div id="root"></div>
+    <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"ca507c5e25e743c1b0cde6be402e6f5b","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+  </html>
+  
+

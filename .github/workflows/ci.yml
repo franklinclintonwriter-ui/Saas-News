@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-typecheck-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prisma generate (validate schema only, no DB)
+        run: npx prisma validate --schema prisma/schema.prisma
+        env:
+          DATABASE_URL: postgresql://fake
+
+      - name: Typecheck (frontend + api)
+        run: npm run typecheck
+
+      - name: Unit + integration tests
+        run: npm run test:coverage
+        env:
+          NODE_ENV: test
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage
+          retention-days: 7
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: lint-typecheck-test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Build public surface
+        run: npm run build:public
+        env:
+          VITE_API_BASE_URL: https://api.example.test/api
+      - name: Build admin surface
+        run: npm run build:admin
+        env:
+          VITE_API_BASE_URL: https://api.example.test/api
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: build
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium firefox
+      - name: Run Playwright against preview
+        if: env.PLAYWRIGHT_BASE_URL != ''
+        run: npm run test:e2e
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ secrets.PLAYWRIGHT_BASE_URL }}
+      - name: Skip e2e (no preview URL configured)
+        if: env.PLAYWRIGHT_BASE_URL == ''
+        run: echo "::notice::Skipping e2e — set PLAYWRIGHT_BASE_URL secret to enable."

@@ -83,9 +83,12 @@ export default function ContactInbox() {
   };
 
   return (
-    <div>
-      {!canManageInbox ? <p className="mb-4 text-xs font-semibold text-[#92400E]">Read-only for your role</p> : null}
-
+    <div className="space-y-6">
+      <div className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm md:p-6">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {!canManageInbox ? <span className="inline-flex rounded-full border border-[#FEF3C7] bg-[#FEF9C3] px-3 py-1.5 text-xs font-semibold text-[#92400E]">Read-only mode</span> : null}
+        </div>
+      </div>
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-4">
         {[
           ['New', counts.new],

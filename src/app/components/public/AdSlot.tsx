@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import DOMPurify from 'dompurify';
 import { useCms } from '../../context/cms-context';
 
 type AdSlotProps = {
@@ -7,18 +8,25 @@ type AdSlotProps = {
   fallbackSize?: string;
 };
 
+const AD_SANITIZE_CONFIG: Parameters<typeof DOMPurify.sanitize>[1] = {
+  ADD_ATTR: ['target', 'rel'],
+  FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'meta', 'link'],
+  FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur', 'onchange', 'onsubmit'],
+};
+
 export default function AdSlot({ placement, className = '' }: AdSlotProps) {
   const { state } = useCms();
   const ad = useMemo(() => state.ads.find((item) => item.enabled && item.placement === placement), [state.ads, placement]);
+  const safeHtml = useMemo(() => (ad?.html ? DOMPurify.sanitize(ad.html, AD_SANITIZE_CONFIG) : ''), [ad?.html]);
 
   if (!ad) {
     return null;
   }
 
-  const body = ad.html ? (
-    <div className="min-h-56" dangerouslySetInnerHTML={{ __html: ad.html }} />
+  const body = safeHtml ? (
+    <div className="min-h-56" dangerouslySetInnerHTML={{ __html: safeHtml }} />
   ) : ad.imageUrl ? (
-    <img src={ad.imageUrl} alt={ad.name} className="h-full w-full object-cover" />
+    <img src={ad.imageUrl} alt={ad.name || 'Advertisement'} loading="lazy" decoding="async" className="h-full w-full object-cover" />
   ) : (
     null
   );

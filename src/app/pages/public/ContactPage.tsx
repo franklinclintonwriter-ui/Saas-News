@@ -87,7 +87,7 @@ export default function ContactPage() {
                     <input
                       id="contact-first"
                       className="w-full px-4 py-3 border border-[#E5E7EB] rounded-lg focus:outline-none focus:border-[#194890] focus:ring-2 focus:ring-[#194890]/15"
-                      aria-invalid={errors.firstName ? 'true' : 'false'}
+                      aria-invalid={!!errors.firstName}
                       {...register('firstName', { required: 'First name is required.' })}
                     />
                     {errors.firstName && <p className="mt-1 text-sm text-red-600">{errors.firstName.message}</p>}
@@ -99,7 +99,7 @@ export default function ContactPage() {
                     <input
                       id="contact-last"
                       className="w-full px-4 py-3 border border-[#E5E7EB] rounded-lg focus:outline-none focus:border-[#194890] focus:ring-2 focus:ring-[#194890]/15"
-                      aria-invalid={errors.lastName ? 'true' : 'false'}
+                      aria-invalid={!!errors.lastName}
                       {...register('lastName', { required: 'Last name is required.' })}
                     />
                     {errors.lastName && <p className="mt-1 text-sm text-red-600">{errors.lastName.message}</p>}
@@ -115,7 +115,7 @@ export default function ContactPage() {
                     type="email"
                     autoComplete="email"
                     className="w-full px-4 py-3 border border-[#E5E7EB] rounded-lg focus:outline-none focus:border-[#194890] focus:ring-2 focus:ring-[#194890]/15"
-                    aria-invalid={errors.email ? 'true' : 'false'}
+                    aria-invalid={!!errors.email}
                     {...register('email', {
                       required: 'Email is required.',
                       pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'Enter a valid email address.' },
@@ -151,7 +151,7 @@ export default function ContactPage() {
                     rows={6}
                     placeholder="Tell us how we can help you..."
                     className="w-full px-4 py-3 border border-[#E5E7EB] rounded-lg focus:outline-none focus:border-[#194890] focus:ring-2 focus:ring-[#194890]/15 resize-none"
-                    aria-invalid={errors.message ? 'true' : 'false'}
+                    aria-invalid={!!errors.message}
                     {...register('message', {
                       required: 'Please enter a message.',
                       minLength: { value: 20, message: 'Message should be at least 20 characters.' },

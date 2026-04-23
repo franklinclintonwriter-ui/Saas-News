@@ -75,13 +75,17 @@ export default function Comments() {
   };
 
   return (
-    <div>
-      <div className="mb-6 flex flex-wrap items-center gap-4 md:mb-8">
+    <div className="space-y-6">
+      <div className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm md:p-6">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <span className="inline-flex rounded-lg bg-[#FEF3C7] px-3 py-2 text-sm font-semibold text-[#92400E]">{pendingCount} Pending</span>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
         {!canModerate ? <p className="text-xs font-semibold text-[#92400E]">Read-only for your role</p> : null}
-        <span className="ml-auto rounded-lg bg-[#FEF3C7] px-3 py-2 text-sm font-semibold text-[#92400E]">{pendingCount} Pending</span>
       </div>
 
-      <div className="bg-white rounded-lg border border-[#E5E7EB] overflow-hidden">
+      <div className="rounded-xl border border-[#E5E7EB] bg-white shadow-sm">
         <div className="p-4 md:p-6 border-b border-[#E5E7EB]">
           <div className="flex flex-col md:flex-row gap-3">
             <div className="flex-1 relative">

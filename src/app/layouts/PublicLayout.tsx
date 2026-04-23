@@ -31,17 +31,27 @@ export default function PublicLayout() {
     );
   }
 
+  if (isBootLoading) {
+    return (
+      <div
+        className="flex min-h-screen flex-col items-center justify-center bg-[#F8FAFC] px-4 text-center"
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
+      >
+        <span
+          className="h-10 w-10 rounded-full border-[3px] border-[#CBD5F5] border-t-[#194890] animate-spin"
+          aria-hidden
+        />
+        <p className="mt-4 text-sm font-semibold text-[#0F172A]">Loading newsroom</p>
+        <p className="mt-1 text-xs text-[#6B7280]">Fetching the latest stories. One moment…</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <SeoManager />
-      {isBootLoading ? (
-        <div className="bg-[#DBEAFE] px-4 py-2 text-xs font-semibold text-[#1E40AF]">
-          <div className="mx-auto flex max-w-[1440px] items-center justify-center gap-2">
-            <span className="h-4 w-4 rounded-full border-2 border-[#93C5FD] border-t-[#1D4ED8] animate-spin" aria-hidden />
-            <span>Loading latest newsroom content and preparing your page...</span>
-          </div>
-        </div>
-      ) : null}
       <div className="px-4 py-2 text-white" style={{ backgroundColor: settings.primaryColor }}>
         <div className="max-w-[1440px] mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3 md:gap-6">

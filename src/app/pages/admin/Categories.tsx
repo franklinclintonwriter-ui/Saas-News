@@ -110,16 +110,20 @@ export default function Categories() {
   };
 
   return (
-    <div>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 md:mb-8">
-        {!canManage ? <p className="text-xs font-semibold text-[#92400E]">Read-only for your role</p> : null}
-        <Button onClick={openCreate} disabled={!canManage} className="bg-[#194890] hover:bg-[#2656A8] font-semibold disabled:opacity-50 ml-auto">
+    <div className="space-y-6">
+      <div className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm md:p-6">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {!canManage ? <span className="inline-flex rounded-full bg-[#FEF3C7] px-3 py-1.5 text-xs font-semibold text-[#92400E]">Read-only access</span> : null}
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center justify-end gap-4">
+        <Button onClick={openCreate} disabled={!canManage} className="bg-[#194890] hover:bg-[#2656A8] font-semibold disabled:opacity-50">
           <Plus size={20} className="mr-2" />
           New Category
         </Button>
       </div>
 
-      <div className="bg-white rounded-lg border border-[#E5E7EB] overflow-hidden">
+      <div className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm sm:p-6">
         <div className="p-4 md:p-6 border-b border-[#E5E7EB]">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280]" size={18} />

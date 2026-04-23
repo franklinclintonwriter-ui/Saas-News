@@ -62,8 +62,13 @@ export default function NewsletterManager() {
   };
 
   return (
-    <div>
-      <div className="mb-6 flex justify-end md:mb-8">
+    <div className="space-y-6">
+      <div className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm md:p-6">
+        <div className="flex flex-wrap items-end justify-end gap-2">
+          <span className="inline-flex rounded-lg bg-[#F3F4F6] px-3 py-2 text-xs font-semibold text-[#374151]">{state.newsletterSubscribers.length} subscribers</span>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <Button type="button" variant="outline" onClick={() => downloadCsv(filtered)}>
           <Download size={18} className="mr-2" />
           Export CSV

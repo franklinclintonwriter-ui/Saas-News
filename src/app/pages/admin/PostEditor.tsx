@@ -3,13 +3,12 @@ import { useNavigate, useParams, Link } from 'react-router';
 import { ArrowLeft, Save, Eye, Upload, X, Image as ImageIcon, Quote, Heading2, BookOpen, FileText, Hash } from 'lucide-react';
 import { toast } from '../../lib/notify';
 import { useCms } from '../../context/cms-context';
-import { useAuth } from '../../context/auth-context';
+import { useAuth, type AuthUser } from '../../context/auth-context';
 import { hasMinimumRole } from '../../lib/admin/role-access';
 import { AiDraftAssistant } from '../../components/admin/AiDraftAssistant';
 import { ArticleMarkdown } from '../../components/articles/ArticleMarkdown';
 import { makeId, slugify, type AdminPost, type AdminUser, type AuthorProfile, type PostStatus } from '../../lib/admin/cms-state';
 import { fetchAdminPostDetail, isExpiredAuthError } from '../../lib/api-cms';
-import { generatedPostImageDataUrl } from '../../lib/generated-post-image';
 
 const PREVIEW_KEY_PREFIX = 'phulpur24_post_preview_';
 
@@ -30,7 +29,24 @@ function profileFromUser(user: AdminUser | undefined): AuthorProfile | null {
   };
 }
 
-function emptyPost(authorDefault: string, authorProfile: AuthorProfile | null): AdminPost {
+function profileFromAuthUser(user: AuthUser | null): AuthorProfile | null {
+  if (!user) return null;
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    title: '',
+    bio: '',
+    avatarUrl: '',
+    location: '',
+    websiteUrl: '',
+    twitterUrl: '',
+    linkedinUrl: '',
+    facebookUrl: '',
+  };
+}
+
+function emptyPost(authorDefault: string, authorProfile: AuthorProfile | null, categorySlug: string): AdminPost {
   const now = new Date().toISOString();
   return {
     id: makeId(),
@@ -40,7 +56,7 @@ function emptyPost(authorDefault: string, authorProfile: AuthorProfile | null): 
     content: '',
     author: authorDefault,
     authorProfile,
-    categorySlug: 'world',
+    categorySlug,
     status: 'Draft',
     tags: [],
     featured: false,
@@ -65,13 +81,22 @@ export default function PostEditor() {
   const { user, accessToken, refreshSession, signOut } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const authorDefaultUser = state.users[0];
-  const authorDefault = authorDefaultUser?.name ?? 'Editor';
-  const authorDefaultProfile = profileFromUser(authorDefaultUser);
+  const authorDefaultUser = useMemo(
+    () =>
+      state.users.find((item) => item.id === user?.id) ??
+      state.users.find((item) => item.email.toLowerCase() === user?.email?.toLowerCase()),
+    [state.users, user?.email, user?.id],
+  );
+  const authorDefaultProfile = useMemo(
+    () => profileFromUser(authorDefaultUser) ?? profileFromAuthUser(user),
+    [authorDefaultUser, user],
+  );
+  const authorDefault = authorDefaultProfile?.name ?? user?.name ?? 'Editor';
+  const defaultCategorySlug = state.categories[0]?.slug ?? '';
 
   const existing = id ? state.posts.find((p) => p.id === id) : undefined;
 
-  const [post, setPost] = useState<AdminPost>(() => existing ?? emptyPost(authorDefault, authorDefaultProfile));
+  const [post, setPost] = useState<AdminPost>(() => existing ?? emptyPost(authorDefault, authorDefaultProfile, defaultCategorySlug));
   const [tagInput, setTagInput] = useState('');
   const [lastSaved, setLastSaved] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -79,6 +104,7 @@ export default function PostEditor() {
   const isEditing = !!id;
   const canEditAnyPost = hasMinimumRole(user?.role, 'EDITOR');
   const canCreatePosts = hasMinimumRole(user?.role, 'AUTHOR');
+  const hasCategories = state.categories.length > 0;
   const canMutatePost = useMemo(() => {
     if (!isEditing) return canCreatePosts;
     if (canEditAnyPost) return true;
@@ -89,8 +115,13 @@ export default function PostEditor() {
   }, [canCreatePosts, canEditAnyPost, isEditing, post.author, post.authorProfile, user?.email, user?.id, user?.name]);
 
   useEffect(() => {
-    if (!id) setPost(emptyPost(authorDefault, authorDefaultProfile));
-  }, [id, authorDefault]);
+    if (!id) setPost(emptyPost(authorDefault, authorDefaultProfile, defaultCategorySlug));
+  }, [id]);
+
+  useEffect(() => {
+    if (id || post.categorySlug || !defaultCategorySlug) return;
+    setPost((current) => ({ ...current, categorySlug: defaultCategorySlug }));
+  }, [defaultCategorySlug, id, post.categorySlug]);
 
   useEffect(() => {
     if (!id) return;
@@ -167,6 +198,10 @@ export default function PostEditor() {
       toast.error('Add a title before saving.');
       return;
     }
+    if (!hasCategories || !post.categorySlug) {
+      toast.error('Create and select a category before saving.');
+      return;
+    }
     const next: AdminPost = {
       ...post,
       excerpt: post.excerpt || post.content.slice(0, 180),
@@ -205,6 +240,10 @@ export default function PostEditor() {
       toast.error('Add a title and body before publishing.');
       return;
     }
+    if (!hasCategories || !post.categorySlug) {
+      toast.error('Create and select a category before publishing.');
+      return;
+    }
     const now = new Date().toISOString();
     const next: AdminPost = {
       ...post,
@@ -213,7 +252,7 @@ export default function PostEditor() {
       status: 'Published',
       publishedAt: post.publishedAt ?? now,
       scheduledAt: null,
-      views: post.views > 0 ? post.views : Math.max(post.views, 400),
+      views: post.views,
       updatedAt: now,
     };
     dispatch({ type: 'POST_UPSERT', post: next });
@@ -229,11 +268,7 @@ export default function PostEditor() {
     () => state.media.find((m) => m.id === post.featuredImageId),
     [post.featuredImageId, state.media],
   );
-  const selectedCategoryName = state.categories.find((category) => category.slug === post.categorySlug)?.name ?? 'News';
-  const generatedPreviewImage = useMemo(
-    () => generatedPostImageDataUrl(post.title || 'Untitled story', selectedCategoryName, post.id),
-    [post.id, post.title, selectedCategoryName],
-  );
+  const selectedCategoryName = state.categories.find((category) => category.slug === post.categorySlug)?.name ?? '';
   const contentStats = useMemo(() => {
     const words = post.content.trim().split(/\s+/).filter(Boolean).length;
     const headings = (post.content.match(/^#{1,6}\s+/gm) ?? []).length;
@@ -284,27 +319,39 @@ export default function PostEditor() {
       kind === 'image'
         ? '\n\n![Caption](image-url)\n\n'
         : kind === 'quote'
-          ? '\n\n> Pull quote goes here — attribution\n\n'
+          ? '\n\n> Pull quote goes here - attribution\n\n'
           : '\n\n## Section heading\n\n';
     setPost((p) => ({ ...p, content: p.content + addition }));
     toast.message(`${kind === 'image' ? 'Image' : kind === 'quote' ? 'Quote' : 'Heading'} block inserted.`);
   };
 
+  const addTag = (value: string) => {
+    const next = slugify(value);
+    if (!next) return;
+    setPost((p) => (p.tags.includes(next) ? p : { ...p, tags: [...p.tags, next] }));
+    setTagInput('');
+  };
+
+  const removeTag = (index: number) => {
+    setPost((p) => ({ ...p, tags: p.tags.filter((_, i) => i !== index) }));
+  };
+
   return (
-    <div>
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
-        <div className="flex items-center gap-4">
-          <Link to="/admin/posts" className="p-2 hover:bg-white rounded-lg transition">
+    <div className="space-y-6">
+      <div className="rounded-xl border border-[#E5E7EB] bg-white px-4 py-4 md:px-6">
+        <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
+        <div className="flex min-w-0 items-center gap-4">
+          <Link to="/admin/posts" className="rounded-lg border border-[#E5E7EB] bg-white p-2 transition hover:bg-[#F3F4F6]" aria-label="Back to posts">
             <ArrowLeft size={20} />
           </Link>
           <div className="min-w-0">
             <p className="text-sm font-semibold text-[#0F172A]">
-              {detailLoading ? 'Loading post…' : `Draft${lastSaved ? ` · Last saved ${lastSaved}` : ' · Not saved yet'}`}
+              {detailLoading ? 'Loading post...' : `Draft${lastSaved ? ` - Last saved ${lastSaved}` : ' - Not saved yet'}`}
             </p>
             {isEditing && !canMutatePost ? <p className="mt-1 text-xs font-semibold text-[#92400E]">Read-only: you can only edit your own posts.</p> : null}
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 md:gap-3 w-full md:w-auto">
+        <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:gap-3">
           <button
             type="button"
             onClick={openPreview}
@@ -332,7 +379,7 @@ export default function PostEditor() {
           </button>
         </div>
       </div>
-
+      </div>
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="lg:col-span-3 space-y-6">
           <AiDraftAssistant post={post} setPost={setPost} />
@@ -422,12 +469,16 @@ export default function PostEditor() {
                   </div>
                   <div className="max-h-[760px] overflow-y-auto bg-white">
                     <div className="border-b border-[#E5E7EB] bg-[#F8FAFC] px-5 py-5">
-                      <span className="mb-3 inline-flex rounded-md bg-[#194890] px-2.5 py-1 text-xs font-bold text-white">{selectedCategoryName}</span>
-                      <h1 className="text-3xl font-black leading-tight text-[#0F172A]">{post.title || 'Untitled story'}</h1>
+                      {selectedCategoryName ? <span className="mb-3 inline-flex rounded-md bg-[#194890] px-2.5 py-1 text-xs font-bold text-white">{selectedCategoryName}</span> : null}
+                      <h1 className="text-3xl font-black leading-tight text-[#0F172A]">{post.title || 'Untitled draft'}</h1>
                       <p className="mt-3 text-base leading-7 text-[#64748B]">{post.excerpt || post.metaDescription || 'The excerpt or meta description will appear here.'}</p>
                     </div>
-                    <div className="h-52 overflow-hidden bg-[#E5E7EB]">
-                      <img src={featuredImage?.url || generatedPreviewImage} alt="" className="h-full w-full object-cover" />
+                    <div className="flex h-52 items-center justify-center overflow-hidden bg-[#E5E7EB]">
+                      {featuredImage ? (
+                        <img src={featuredImage.url} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        <ImageIcon className="text-[#94A3B8]" size={42} aria-hidden />
+                      )}
                     </div>
                     <div className="px-5 py-6">
                       <ArticleMarkdown content={designPreviewContent} variant="admin" />
@@ -494,7 +545,9 @@ export default function PostEditor() {
               className="w-full px-4 py-2 border border-[#E5E7EB] rounded-lg"
               value={post.categorySlug}
               onChange={(e) => setPost((p) => ({ ...p, categorySlug: e.target.value }))}
+              disabled={!hasCategories}
             >
+              {!hasCategories ? <option value="">No categories available</option> : null}
               {state.categories.map((c) => (
                 <option key={c.id} value={c.slug}>
                   {c.name}
@@ -511,7 +564,7 @@ export default function PostEditor() {
                   {tag}
                   <button
                     type="button"
-                    onClick={() => setPost((p) => ({ ...p, tags: p.tags.filter((_, i) => i !== idx) }))}
+                    onClick={() => removeTag(idx)}
                     className="hover:text-[#DC2626]"
                     aria-label={`Remove ${tag}`}
                   >
@@ -520,20 +573,41 @@ export default function PostEditor() {
                 </span>
               ))}
             </div>
-            <input
-              type="text"
-              value={tagInput}
-              onChange={(e) => setTagInput(e.target.value)}
-              placeholder="Add tag…"
-              className="w-full px-4 py-2 border border-[#E5E7EB] rounded-lg"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && tagInput.trim()) {
-                  const t = slugify(tagInput);
-                  if (!post.tags.includes(t)) setPost((p) => ({ ...p, tags: [...p.tags, t] }));
-                  setTagInput('');
-                }
-              }}
-            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                placeholder="Add tag..."
+                className="min-w-0 flex-1 px-4 py-2 border border-[#E5E7EB] rounded-lg"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addTag(tagInput);
+                  }
+                }}
+              />
+              <button type="button" onClick={() => addTag(tagInput)} className="rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm font-semibold hover:bg-[#F3F4F6]">
+                Add
+              </button>
+            </div>
+            {state.tags.length > 0 ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {state.tags
+                  .filter((tag) => !post.tags.includes(tag.slug))
+                  .slice(0, 8)
+                  .map((tag) => (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      onClick={() => addTag(tag.slug)}
+                      className="rounded-full border border-[#E5E7EB] px-3 py-1 text-xs text-[#475569] transition hover:border-[#194890] hover:text-[#194890]"
+                    >
+                      {tag.name}
+                    </button>
+                  ))}
+              </div>
+            ) : null}
           </div>
 
           <div className="bg-white rounded-lg p-6 border border-[#E5E7EB]">
@@ -556,9 +630,8 @@ export default function PostEditor() {
               </div>
             )}
             {!featuredImage && (
-              <div className="mt-4 overflow-hidden rounded-lg border border-[#E5E7EB]">
-                <img src={generatedPreviewImage} alt="" className="h-40 w-full object-cover" />
-                <p className="p-2 text-xs text-[#6B7280]">Auto image preview. The API saves this as the featured image when you publish.</p>
+              <div className="mt-4 flex h-40 items-center justify-center rounded-lg border border-dashed border-[#CBD5E1] bg-[#F8FAFC]">
+                <ImageIcon className="text-[#94A3B8]" size={34} aria-hidden />
               </div>
             )}
           </div>
@@ -625,6 +698,9 @@ export default function PostEditor() {
                     setPost((p) => ({ ...p, author: e.target.value, authorProfile: profileFromUser(selected) }));
                   }}
                 >
+                  {!state.users.some((u) => u.name === post.author) ? (
+                    <option value={post.author}>{post.author}</option>
+                  ) : null}
                   {state.users.map((u) => (
                     <option key={u.id} value={u.name}>
                       {u.name}

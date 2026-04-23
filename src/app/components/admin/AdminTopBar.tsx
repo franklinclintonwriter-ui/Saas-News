@@ -11,6 +11,7 @@ import {
   MailCheck,
   Megaphone,
   Menu,
+  MessageSquare,
   Navigation as NavigationIcon,
   Plus,
   Search,
@@ -114,6 +115,7 @@ export default function AdminTopBar({ onMenuClick }: AdminTopBarProps) {
   const recentAudit = state.auditLog.slice(0, 8);
   const draftCount = state.posts.filter((post) => post.status === 'Draft').length;
   const pendingComments = state.comments.filter((comment) => comment.status === 'pending').length;
+  const needsEditorialAttention = draftCount > 0 || pendingComments > 0;
 
   return (
     <>
@@ -220,35 +222,66 @@ export default function AdminTopBar({ onMenuClick }: AdminTopBarProps) {
                 New Post
               </Link>
             ) : null}
-            <div className="hidden items-center gap-2 rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-xs font-semibold text-[#475569] shadow-sm xl:flex">
-              <span>{draftCount} drafts</span>
-              <span className="h-4 w-px bg-[#E5E7EB]" />
-              <span>{pendingComments} pending</span>
-            </div>
             <ThemeModeButton compact />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button type="button" className="relative rounded-lg border border-[#E5E7EB] bg-white p-2 shadow-sm transition hover:bg-[#F3F4F6]" aria-label="Notifications">
+                <button
+                  type="button"
+                  className="relative rounded-lg border border-[#E5E7EB] bg-white p-2 shadow-sm transition hover:bg-[#F3F4F6] dark:border-border dark:bg-[#0b1220] dark:hover:bg-[#1e293b]"
+                  aria-label={needsEditorialAttention ? 'Notifications — action required' : 'Notifications'}
+                >
                   <Bell size={20} />
-                  {recentAudit.length > 0 && (
+                  {needsEditorialAttention ? (
                     <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[#DC2626] ring-2 ring-white dark:ring-[#0f172a]" />
-                  )}
+                  ) : null}
                 </button>
               </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="z-[60] w-[21rem]">
+              <DropdownMenuContent align="end" className="z-[60] w-[21rem]">
+                {needsEditorialAttention ? (
+                  <>
+                    <DropdownMenuLabel className="text-xs font-bold uppercase tracking-wide text-[#B91C1C] dark:text-red-400">
+                      Needs attention
+                    </DropdownMenuLabel>
+                    {draftCount > 0 ? (
+                      <DropdownMenuItem asChild className="cursor-pointer bg-[#FEF2F2] focus:bg-[#FEE2E2] dark:bg-red-950/35 dark:focus:bg-red-950/55">
+                        <Link to="/admin/posts" className="flex w-full flex-col gap-0.5 py-2">
+                          <span className="flex items-center gap-2 text-sm font-semibold text-[#991B1B] dark:text-red-200">
+                            <FileText size={16} aria-hidden />
+                            {draftCount} draft{draftCount === 1 ? '' : 's'} in the queue
+                          </span>
+                          <span className="text-xs text-[#B45309] dark:text-amber-200/90">Open Posts to review and publish.</span>
+                        </Link>
+                      </DropdownMenuItem>
+                    ) : null}
+                    {pendingComments > 0 ? (
+                      <DropdownMenuItem asChild className="cursor-pointer bg-[#FEF2F2] focus:bg-[#FEE2E2] dark:bg-red-950/35 dark:focus:bg-red-950/55">
+                        <Link to="/admin/comments" className="flex w-full flex-col gap-0.5 py-2">
+                          <span className="flex items-center gap-2 text-sm font-semibold text-[#991B1B] dark:text-red-200">
+                            <MessageSquare size={16} aria-hidden />
+                            {pendingComments} comment{pendingComments === 1 ? '' : 's'} awaiting moderation
+                          </span>
+                          <span className="text-xs text-[#B45309] dark:text-amber-200/90">Open Comments to approve or remove.</span>
+                        </Link>
+                      </DropdownMenuItem>
+                    ) : null}
+                    <DropdownMenuSeparator />
+                  </>
+                ) : null}
                 <DropdownMenuLabel>Recent activity</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {recentAudit.length === 0 ? (
-                  <div className="px-2 py-3 text-sm text-[#6B7280]">No events yet. Edits and publishes appear here.</div>
+                  <div className="px-2 py-3 text-sm text-[#6B7280] dark:text-slate-400">
+                    {needsEditorialAttention ? 'No audit events yet.' : 'No notifications yet. Editorial alerts appear above when you have drafts or pending comments.'}
+                  </div>
                 ) : (
                   recentAudit.map((a) => (
-                    <DropdownMenuItem key={a.id} className="flex cursor-default flex-col items-start gap-0.5 focus:bg-[#F3F4F6]">
-                      <span className="text-sm font-medium text-[#111827]">{a.action}</span>
-                      <span className="text-xs text-[#6B7280]">
+                    <DropdownMenuItem key={a.id} className="flex cursor-default flex-col items-start gap-0.5 focus:bg-[#F3F4F6] dark:focus:bg-[#1e293b]">
+                      <span className="text-sm font-medium text-[#111827] dark:text-slate-100">{a.action}</span>
+                      <span className="text-xs text-[#6B7280] dark:text-slate-400">
                         {a.resource}
                         {a.detail ? ` - ${a.detail}` : ''}
                       </span>
-                      <span className="text-[10px] text-[#9CA3AF]">
+                      <span className="text-[10px] text-[#9CA3AF] dark:text-slate-500">
                         {a.actor} - {formatRelative(a.at)}
                       </span>
                     </DropdownMenuItem>

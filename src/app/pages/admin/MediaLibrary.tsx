@@ -123,27 +123,38 @@ export default function MediaLibrary() {
   };
 
   return (
-    <div>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 md:mb-8">
-        {!canUploadOrEditAlt ? <p className="text-xs font-semibold text-[#92400E]">Read-only for your role</p> : null}
-        <Button className="bg-[#194890] font-semibold hover:bg-[#2656A8] ml-auto" disabled={uploading || !canUploadOrEditAlt} onClick={() => inputRef.current?.click()}>
-          <Upload size={20} className="mr-2" />
-          {uploading ? 'Uploading...' : 'Upload Files'}
-        </Button>
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          className="hidden"
-          accept="image/*,.pdf,.doc,.docx"
-          onChange={(event) => {
-            void onFiles(event.target.files);
-            event.target.value = '';
-          }}
-        />
+    <div className="space-y-6">
+      <div className="rounded-xl border border-[#E5E7EB] bg-white px-4 py-4 md:px-6 md:py-5">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-2">
+            {!canUploadOrEditAlt ? <span className="inline-flex rounded-full border border-[#FDE68A] bg-[#FEF3C7] px-3 py-1 text-xs font-semibold text-[#92400E]">Read-only mode</span> : null}
+            <span className="inline-flex rounded-full border border-[#E5E7EB] bg-white px-3 py-1 text-xs font-semibold text-[#64748B]">
+              {state.media.length} files · {formatBytes(totalBytes)}
+            </span>
+            <Button
+              className="bg-[#194890] font-semibold hover:bg-[#2656A8] sm:w-auto w-full"
+              disabled={uploading || !canUploadOrEditAlt}
+              onClick={() => inputRef.current?.click()}
+            >
+              <Upload size={20} className="mr-2" />
+              {uploading ? 'Uploading...' : 'Upload Files'}
+            </Button>
+          </div>
+          <input
+            ref={inputRef}
+            type="file"
+            multiple
+            className="hidden"
+            accept="image/*,.pdf,.doc,.docx"
+            onChange={(event) => {
+              void onFiles(event.target.files);
+              event.target.value = '';
+            }}
+          />
+        </div>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-[#E5E7EB] bg-white">
+      <div className="overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-sm">
         <div className="border-b border-[#E5E7EB] p-4 md:p-6">
           <div className="flex flex-col items-stretch gap-4 xl:flex-row xl:items-center">
             <div className="relative min-w-0 flex-1">
@@ -305,7 +316,7 @@ export default function MediaLibrary() {
       </div>
 
       {selected && (
-        <div className="mt-6 rounded-lg border border-[#E5E7EB] bg-white p-6">
+        <div className="rounded-xl border border-[#E5E7EB] bg-white p-6 shadow-sm">
           <h3 className="mb-4 font-bold">File Details</h3>
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div>

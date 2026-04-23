@@ -1,29 +1,37 @@
 import { Link } from 'react-router';
-import { Clock } from 'lucide-react';
-import { generatedPostImageDataUrl } from '../../lib/generated-post-image';
+import { Clock, Image as ImageIcon } from 'lucide-react';
 
 interface NewsCardProps {
   id: string;
   title: string;
   category: string;
   date: string;
-  imageUrl?: string;
+  imageUrl?: string | null;
   excerpt?: string;
   featured?: boolean;
 }
 
 export default function NewsCard({ id, title, category, date, imageUrl, excerpt, featured }: NewsCardProps) {
-  const resolvedImageUrl = imageUrl || generatedPostImageDataUrl(title, category, id);
-
   if (featured) {
     return (
       <Link to={`/article/${id}`} className="block group">
         <div className="relative h-[400px] rounded-lg overflow-hidden mb-4">
-          <img
-            src={resolvedImageUrl}
-            alt={title}
-            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-          />
+          {imageUrl ? (
+            <img
+              src={imageUrl}
+              alt={title}
+              loading="eager"
+              fetchPriority="high"
+              decoding="async"
+              width={1200}
+              height={630}
+              className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center bg-[#E5E7EB]">
+              <ImageIcon className="text-[#94A3B8]" size={42} aria-hidden />
+            </div>
+          )}
           <div className="absolute top-4 left-4">
             <span className="bg-[#194890] text-white px-3 py-1 text-sm rounded">{category}</span>
           </div>
@@ -42,11 +50,21 @@ export default function NewsCard({ id, title, category, date, imageUrl, excerpt,
     <Link to={`/article/${id}`} className="block group">
       <div className="bg-white rounded-lg overflow-hidden border border-[#E5E7EB] hover:shadow-lg transition">
         <div className="relative h-48 overflow-hidden">
-          <img
-            src={resolvedImageUrl}
-            alt={title}
-            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-          />
+          {imageUrl ? (
+            <img
+              src={imageUrl}
+              alt={title}
+              loading="lazy"
+              decoding="async"
+              width={600}
+              height={384}
+              className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center bg-[#E5E7EB]">
+              <ImageIcon className="text-[#94A3B8]" size={32} aria-hidden />
+            </div>
+          )}
           <div className="absolute top-3 left-3">
             <span className="bg-[#194890] text-white px-2 py-1 text-xs rounded">{category}</span>
           </div>

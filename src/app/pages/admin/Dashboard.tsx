@@ -77,12 +77,13 @@ export default function Dashboard() {
   };
 
   return (
-    <div>
+    <div className="space-y-6">
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8">
         {stats.map((stat) => {
           const Icon = stat.icon;
           return (
-            <div key={stat.label} className="bg-white rounded-lg p-6 border border-[#E5E7EB]">
+            <div key={stat.label} className="bg-white rounded-xl p-6 border border-[#E5E7EB] shadow-sm">
               <div className="flex items-start justify-between gap-3 mb-4">
                 <div className={`${stat.color} w-12 h-12 rounded-lg flex items-center justify-center shrink-0`}>
                   <Icon className="text-white" size={24} />
@@ -97,7 +98,7 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
-        <div className="lg:col-span-2 bg-white rounded-lg p-4 md:p-6 border border-[#E5E7EB]">
+        <div className="lg:col-span-2 bg-white rounded-xl p-4 md:p-6 border border-[#E5E7EB] shadow-sm">
           <h2 className="text-lg md:text-xl font-bold mb-4">Traffic Overview</h2>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={dashboardTrafficData}>
@@ -110,7 +111,7 @@ export default function Dashboard() {
           </ResponsiveContainer>
         </div>
 
-        <div className="bg-white rounded-lg p-4 md:p-6 border border-[#E5E7EB]">
+        <div className="bg-white rounded-xl p-4 md:p-6 border border-[#E5E7EB] shadow-sm">
           <h2 className="text-lg md:text-xl font-bold mb-4">Top Categories</h2>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={categoryData.length ? categoryData : [{ category: '-', count: 0 }]} layout="vertical">
@@ -125,7 +126,7 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
-        <div className="lg:col-span-2 bg-white rounded-lg border border-[#E5E7EB] overflow-hidden">
+        <div className="lg:col-span-2 bg-white rounded-xl border border-[#E5E7EB] overflow-hidden shadow-sm">
           <div className="p-4 md:p-6 border-b border-[#E5E7EB]">
             <h2 className="text-lg md:text-xl font-bold">Recent Posts</h2>
           </div>
@@ -175,7 +176,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg p-4 md:p-6 border border-[#E5E7EB]">
+        <div className="bg-white rounded-xl p-4 md:p-6 border border-[#E5E7EB] shadow-sm">
           <h2 className="text-lg md:text-xl font-bold mb-4">Recent Activity</h2>
           <div className="space-y-4">
             {state.auditLog.length === 0 ? (

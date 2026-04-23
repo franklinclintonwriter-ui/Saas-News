@@ -23,7 +23,8 @@ export default function AuditLog() {
   }, [state.auditLog, q, resource]);
 
   return (
-    <div>
+    <div className="space-y-6">
+
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="rounded-lg border border-[#E5E7EB] bg-white p-5">
           <p className="text-sm text-[#6B7280]">Events</p>

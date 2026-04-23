@@ -50,7 +50,7 @@ function parseInline(text: string): React.ReactNode[] {
       const href = safeUrl(link?.[2] ?? '');
       nodes.push(
         href ? (
-          <a key={`${match.index}-link`} href={href} className="font-semibold text-[#194890] underline decoration-[#194890]/25 underline-offset-4" target={href.startsWith('http') ? '_blank' : undefined} rel={href.startsWith('http') ? 'noreferrer' : undefined}>
+          <a key={`${match.index}-link`} href={href} className="font-semibold text-[#194890] underline decoration-[#194890]/25 underline-offset-4" target={href.startsWith('http') ? '_blank' : undefined} rel={href.startsWith('http') ? 'noopener noreferrer' : undefined}>
             {link?.[1]}
           </a>
         ) : (
@@ -186,7 +186,7 @@ export function ArticleMarkdown({ content, className = '', variant = 'public' }:
     <article className={`max-w-none text-[#1F2937] ${className}`}>
       {blocks.map((block, index) => {
         if (block.type === 'heading') {
-          const Tag = `h${block.level}` as keyof JSX.IntrinsicElements;
+          const Tag = `h${block.level}` as React.ElementType;
           return (
             <Tag key={`${block.id}-${index}`} id={block.id} className={`${headingClass(block.level, variant)} scroll-mt-28`}>
               {parseInline(block.text)}
@@ -246,4 +246,3 @@ export function ArticleMarkdown({ content, className = '', variant = 'public' }:
     </article>
   );
 }
-

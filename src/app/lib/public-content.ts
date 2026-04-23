@@ -1,7 +1,6 @@
 import type { ArticleDetail, ArticleListItem } from './content/article-catalog';
 import type { AdminComment, AdminPost, CmsState } from './admin/cms-state';
 import { formatRelative } from './admin/cms-state';
-import { generatedPostImageDataUrl } from './generated-post-image';
 import { extractHeadingsFromMarkdown } from './markdown';
 
 export function publishedPosts(posts: AdminPost[]): AdminPost[] {
@@ -12,11 +11,9 @@ export function categoryLabelForSlug(state: CmsState, slug: string): string {
   return state.categories.find((c) => c.slug === slug)?.name ?? slug.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export function imageUrlForPost(state: CmsState, post: AdminPost): string {
-  const categoryName = categoryLabelForSlug(state, post.categorySlug);
-  return post.featuredImageId
-    ? state.media.find((m) => m.id === post.featuredImageId)?.url ?? generatedPostImageDataUrl(post.title, categoryName, post.id)
-    : generatedPostImageDataUrl(post.title, categoryName, post.id);
+export function imageUrlForPost(state: CmsState, post: AdminPost): string | null {
+  if (!post.featuredImageId) return null;
+  return state.media.find((m) => m.id === post.featuredImageId)?.url ?? null;
 }
 
 export function adminPostToListItem(state: CmsState, post: AdminPost): ArticleListItem {

@@ -410,7 +410,14 @@ async function ensureGeneratedFeaturedImage(input: {
 }
 
 function siteUrl(settings: Awaited<ReturnType<typeof getSiteSettings>>): string {
-  return (settings.siteUrl || 'http://localhost:5174').replace(/\/+$/, '');
+  const configured = settings.siteUrl?.trim();
+  if (configured) return configured.replace(/\/+$/, '');
+  const fromEnv = process.env.PUBLIC_SITE_URL?.trim();
+  if (fromEnv) return fromEnv.replace(/\/+$/, '');
+  if (config.nodeEnv === 'production') {
+    throw new Error('Site URL is not configured. Set it in Admin → Settings or via PUBLIC_SITE_URL env.');
+  }
+  return `http://127.0.0.1:${config.port}`;
 }
 
 function absoluteUrl(base: string, path: string): string {

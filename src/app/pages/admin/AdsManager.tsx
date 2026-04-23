@@ -163,10 +163,14 @@ export default function AdsManager() {
   };
 
   return (
-    <div>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 md:mb-8">
-        {!canManageAds ? <p className="text-xs font-semibold text-[#92400E]">Read-only for your role</p> : null}
-        <Button onClick={openCreate} disabled={!canManageAds} className="bg-[#194890] font-semibold hover:bg-[#2656A8] ml-auto">
+    <div className="space-y-6">
+      <div className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm md:p-6">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {!canManageAds ? <span className="inline-flex rounded-full border border-[#FEF3C7] bg-[#FEF9C3] px-3 py-1.5 text-xs font-semibold text-[#92400E]">Read-only mode</span> : null}
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <Button onClick={openCreate} disabled={!canManageAds} className="bg-[#194890] font-semibold hover:bg-[#2656A8]">
           <Plus size={20} className="mr-2" />
           New Ad
         </Button>
@@ -187,7 +191,7 @@ export default function AdsManager() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-[#E5E7EB] bg-white">
+      <div className="rounded-xl border border-[#E5E7EB] bg-white shadow-sm">
         <div className="border-b border-[#E5E7EB] p-4 md:p-6">
           <div className="flex flex-col gap-3 md:flex-row">
             <div className="relative flex-1">

@@ -1,6 +1,6 @@
 
-export const CMS_STORAGE_KEY = 'phulpur24_cms_state_v2';
 export const CMS_VERSION = 2;
+const CMS_STORAGE_KEY = 'phulpur24-cms-state';
 
 export type PostStatus = 'Published' | 'Draft' | 'Scheduled';
 export type CommentStatus = 'approved' | 'pending' | 'spam';
@@ -272,12 +272,6 @@ export function slugify(input: string): string {
     .replace(/^-|-$/g, '') || 'untitled';
 }
 
-export function deterministicViews(seed: string): number {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-  return 400 + (h % 48000);
-}
-
 export function computeSeoScore(p: Pick<AdminPost, 'title' | 'seoTitle' | 'metaDescription' | 'focusKeyword' | 'content'>): number {
   let s = 40;
   const t = p.seoTitle.trim() || p.title.trim();
@@ -307,7 +301,7 @@ const EMPTY_SETTINGS: SiteSettings = {
   showFooterSiteTitle: true,
   faviconUrl: '',
   ogImageUrl: '',
-  siteUrl: 'http://localhost:5174',
+  siteUrl: '',
   organizationName: '',
   defaultSeoTitle: '',
   defaultMetaDescription: '',
@@ -347,252 +341,8 @@ const EMPTY_SETTINGS: SiteSettings = {
   dailyDigest: false,
 };
 
-function seedCategories(): AdminCategory[] {
-  return [
-    { id: 'technology', name: 'Technology', slug: 'technology', description: 'Latest tech news and updates', color: '#2563EB' },
-    { id: 'business', name: 'Business', slug: 'business', description: 'Business and finance news', color: '#194890' },
-    { id: 'world', name: 'World', slug: 'world', description: 'Global news and events', color: '#DC2626' },
-    { id: 'politics', name: 'Politics', slug: 'politics', description: 'Political news and analysis', color: '#7C3AED' },
-    { id: 'sports', name: 'Sports', slug: 'sports', description: 'Sports news and highlights', color: '#F59E0B' },
-    { id: 'entertainment', name: 'Entertainment', slug: 'entertainment', description: 'Entertainment and celebrity news', color: '#EC4899' },
-    { id: 'science', name: 'Science', slug: 'science', description: 'Science and research', color: '#10B981' },
-    { id: 'health', name: 'Health', slug: 'health', description: 'Health and wellness', color: '#06B6D4' },
-  ];
-}
 
-function seedTags(): AdminTag[] {
-  return [
-    { id: 'ai', name: 'AI', slug: 'ai', color: '#2563EB' },
-    { id: 'machine-learning', name: 'Machine Learning', slug: 'machine-learning', color: '#7C3AED' },
-    { id: 'blockchain', name: 'Blockchain', slug: 'blockchain', color: '#10B981' },
-    { id: 'cloud-computing', name: 'Cloud Computing', slug: 'cloud-computing', color: '#06B6D4' },
-    { id: 'cybersecurity', name: 'Cybersecurity', slug: 'cybersecurity', color: '#DC2626' },
-    { id: '5g', name: '5G', slug: '5g', color: '#F59E0B' },
-    { id: 'iot', name: 'IoT', slug: 'iot', color: '#EC4899' },
-    { id: 'big-data', name: 'Big Data', slug: 'big-data', color: '#194890' },
-    { id: 'quantum-computing', name: 'Quantum Computing', slug: 'quantum-computing', color: '#8B5CF6' },
-    { id: 'robotics', name: 'Robotics', slug: 'robotics', color: '#EF4444' },
-    { id: 'ar-vr', name: 'AR/VR', slug: 'ar-vr', color: '#14B8A6' },
-    { id: 'fintech', name: 'Fintech', slug: 'fintech', color: '#F97316' },
-  ];
-}
 
-function seedPosts(): AdminPost[] {
-  const now = new Date().toISOString();
-  const allTags = seedTags();
-  const authors = seedUsers().filter((user) => user.status === 'active' && ['Admin', 'Editor', 'Author'].includes(user.role));
-  return ARTICLE_CATALOG.map((row, i) => {
-    const author = authors[i % authors.length]!;
-    const status = STATUSES[i % STATUSES.length];
-    const slug = slugify(row.title);
-    const kw = row.keywords.split(/\s+/).filter(Boolean);
-    const tags = [allTags[i % allTags.length]!.slug];
-    const publishedAt = status === 'Published' ? now : status === 'Scheduled' ? new Date(Date.now() + 86400000).toISOString() : null;
-    return {
-      id: row.id,
-      title: row.title,
-      slug,
-      excerpt: row.excerpt,
-      content: `${row.excerpt}\n\nThis editorial draft is synchronized with the public article catalog for id **${row.id}**. Expand with additional reporting, quotes, and citations before publishing.\n\n## Key takeaways\n\n- Verify sources with on-the-record spokespeople.\n- Update publish time after legal review.\n- Add primary-category SEO alignment.`,
-      author: author.name,
-      authorProfile: profileForUser(author),
-      categorySlug: row.categorySlug,
-      status,
-      tags,
-      featured: i === 0,
-      breaking: i === 2,
-      seoTitle: row.title.slice(0, 58),
-      metaDescription: row.excerpt.slice(0, 158),
-      focusKeyword: kw[0] || row.categorySlug,
-      canonicalUrl: '',
-      featuredImageId: null,
-      scheduledAt: status === 'Scheduled' ? publishedAt : null,
-      readTime: `${5 + (i % 8)} min`,
-      views: status === 'Published' ? deterministicViews(row.id) : 0,
-      updatedAt: now,
-      publishedAt,
-    } satisfies AdminPost;
-  });
-}
-
-function seedMedia(): AdminMedia[] {
-  const base = Date.UTC(2026, 3, 21, 12, 0, 0);
-  const sizes = [
-    [1920, 1080, 890_000],
-    [1600, 900, 620_000],
-    [1280, 720, 410_000],
-    [1024, 768, 320_000],
-    [800, 600, 210_000],
-  ];
-  return Array.from({ length: 18 }, (_, i) => {
-    const [w, h, sz] = sizes[i % sizes.length]!;
-    return {
-      id: `media_seed_${i + 1}`,
-      name: `asset-${String(i + 1).padStart(3, '0')}.jpg`,
-      alt: `Library asset ${i + 1}`,
-      url: `https://picsum.photos/seed/phulpur24cms${i}/400/400`,
-      mime: 'image/jpeg',
-      sizeBytes: sz + i * 1200,
-      width: w,
-      height: h,
-      uploadedAt: new Date(base - i * 3600_000).toISOString(),
-    } satisfies AdminMedia;
-  });
-}
-
-function seedComments(posts: AdminPost[]): AdminComment[] {
-  const samples = [
-    { author: 'John Doe', email: 'john@example.com', content: 'Fascinating article—clear analysis and strong sourcing.' },
-    { author: 'Sarah Smith', email: 'sarah@example.com', content: 'Great breakdown. Will you follow up with interview clips?' },
-    { author: 'Mike Johnson', email: 'mike@example.com', content: 'This is exactly the context readers need—thank you.' },
-    { author: 'Emily Chen', email: 'emily@example.com', content: 'Watching how the story develops; please keep updates coming.' },
-    { author: 'David Wilson', email: 'david@example.com', content: 'Excellent coverage—balanced and well written.' },
-    { author: 'Lisa Anderson', email: 'lisa@example.com', content: 'Would love to see more charts in the next piece.' },
-    { author: 'Robert Brown', email: 'robert@example.com', content: 'Forward-looking and precise—shared with my team.' },
-    { author: 'Jennifer Lee', email: 'jennifer@example.com', content: 'Appreciate the transparency on methodology here.' },
-  ];
-  const statuses: CommentStatus[] = ['approved', 'pending', 'approved', 'pending', 'approved', 'spam', 'approved', 'pending'];
-  return samples.map((s, i) => ({
-    id: `comment_${i + 1}`,
-    postId: posts[i % posts.length]!.id,
-    ...s,
-    status: statuses[i]!,
-    createdAt: new Date(Date.now() - (i + 1) * 3600_000).toISOString(),
-  }));
-}
-
-function seedUsers(): AdminUser[] {
-  return [
-    {
-      id: 'u1',
-      name: 'Sarah Johnson',
-      email: 'sarah@phulpur24.com',
-      role: 'Admin',
-      status: 'active',
-      title: 'Editor in chief',
-      bio: 'Sarah leads Phulpur24 coverage standards, corrections policy, and newsroom verification workflows.',
-      avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=320&q=80',
-      location: 'New York',
-      websiteUrl: '',
-      twitterUrl: 'https://twitter.com/phulpur24',
-      linkedinUrl: 'https://www.linkedin.com',
-      facebookUrl: '',
-      joinedAt: '2025-01-15T00:00:00.000Z',
-    },
-    {
-      id: 'u2',
-      name: 'Mike Chen',
-      email: 'mike@phulpur24.com',
-      role: 'Editor',
-      status: 'active',
-      title: 'Technology editor',
-      bio: 'Mike edits technology and cybersecurity reporting with a focus on primary documentation, platform accountability, and reader-useful context.',
-      avatarUrl: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=320&q=80',
-      location: 'San Francisco',
-      websiteUrl: '',
-      twitterUrl: 'https://twitter.com/phulpur24',
-      linkedinUrl: 'https://www.linkedin.com',
-      facebookUrl: '',
-      joinedAt: '2025-02-03T00:00:00.000Z',
-    },
-    {
-      id: 'u3',
-      name: 'Emma Davis',
-      email: 'emma@phulpur24.com',
-      role: 'Author',
-      status: 'active',
-      title: 'World affairs correspondent',
-      bio: 'Emma reports on diplomacy, climate policy, and global institutions, emphasizing verified records and local expert voices.',
-      avatarUrl: 'https://images.unsplash.com/photo-1534751516642-a1af1ef26a56?auto=format&fit=crop&w=320&q=80',
-      location: 'London',
-      websiteUrl: '',
-      twitterUrl: 'https://twitter.com/phulpur24',
-      linkedinUrl: 'https://www.linkedin.com',
-      facebookUrl: '',
-      joinedAt: '2025-02-10T00:00:00.000Z',
-    },
-    {
-      id: 'u4',
-      name: 'John Smith',
-      email: 'john@phulpur24.com',
-      role: 'Author',
-      status: 'active',
-      title: 'Business reporter',
-      bio: 'John covers markets, corporate earnings, and economic policy for readers who need clear numbers and plain-language analysis.',
-      avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=320&q=80',
-      location: 'Chicago',
-      websiteUrl: '',
-      twitterUrl: 'https://twitter.com/phulpur24',
-      linkedinUrl: 'https://www.linkedin.com',
-      facebookUrl: '',
-      joinedAt: '2025-03-01T00:00:00.000Z',
-    },
-    {
-      id: 'u5',
-      name: 'Alex Brown',
-      email: 'alex@phulpur24.com',
-      role: 'Editor',
-      status: 'active',
-      title: 'Culture and media editor',
-      bio: 'Alex edits entertainment, media, and culture stories with attention to attribution, fairness, and audience transparency.',
-      avatarUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=320&q=80',
-      location: 'Los Angeles',
-      websiteUrl: '',
-      twitterUrl: 'https://twitter.com/phulpur24',
-      linkedinUrl: 'https://www.linkedin.com',
-      facebookUrl: '',
-      joinedAt: '2025-03-05T00:00:00.000Z',
-    },
-    {
-      id: 'u6',
-      name: 'Lisa Anderson',
-      email: 'lisa@phulpur24.com',
-      role: 'Author',
-      status: 'inactive',
-      title: 'Health contributor',
-      bio: 'Lisa contributes health explainers and clinical research updates reviewed against source papers and public health guidance.',
-      avatarUrl: '',
-      location: 'Boston',
-      websiteUrl: '',
-      twitterUrl: '',
-      linkedinUrl: '',
-      facebookUrl: '',
-      joinedAt: '2025-03-12T00:00:00.000Z',
-    },
-    {
-      id: 'u7',
-      name: 'Robert Wilson',
-      email: 'robert@phulpur24.com',
-      role: 'Contributor',
-      status: 'active',
-      title: 'Sports contributor',
-      bio: 'Robert contributes sports analysis, match context, and interview-based features.',
-      avatarUrl: '',
-      location: 'Dallas',
-      websiteUrl: '',
-      twitterUrl: '',
-      linkedinUrl: '',
-      facebookUrl: '',
-      joinedAt: '2025-03-20T00:00:00.000Z',
-    },
-    {
-      id: 'u8',
-      name: 'Jennifer Lee',
-      email: 'jennifer@phulpur24.com',
-      role: 'Contributor',
-      status: 'pending',
-      title: 'Science contributor',
-      bio: 'Jennifer is onboarding to cover space, research, and science policy.',
-      avatarUrl: '',
-      location: 'Seattle',
-      websiteUrl: '',
-      twitterUrl: '',
-      linkedinUrl: '',
-      facebookUrl: '',
-      joinedAt: '2025-04-01T00:00:00.000Z',
-    },
-  ];
-}
 
 function profileForUser(user: AdminUser): AuthorProfile {
   return {
@@ -649,7 +399,7 @@ function withAudit(state: CmsState, actor: string, action: string, resource: str
 export type CmsAction =
   | { type: 'HYDRATE'; payload: CmsState }
   | { type: 'POST_DETAIL_HYDRATE'; post: AdminPost }
-  | { type: 'RESET_DEMO'; actor?: string }
+  | { type: 'RESET_WORKSPACE'; actor?: string }
   | { type: 'POST_UPSERT'; post: AdminPost; actor?: string }
   | { type: 'POST_DELETE'; id: string; actor?: string }
   | { type: 'POSTS_BULK_DELETE'; ids: string[]; actor?: string }
@@ -698,7 +448,7 @@ export function cmsReducer(state: CmsState, action: CmsAction): CmsState {
           ? state.posts.map((post) => (post.id === action.post.id ? action.post : post))
           : [action.post, ...state.posts],
       };
-    case 'RESET_DEMO': {
+    case 'RESET_WORKSPACE': {
       const next = createEmptyCmsState();
       return withAudit(next, action.actor ?? actor, 'Workspace reset', 'System', 'Local state cleared');
     }
@@ -738,7 +488,7 @@ export function cmsReducer(state: CmsState, action: CmsAction): CmsState {
         if (action.status === 'Published') {
           publishedAt = publishedAt ?? now;
           scheduledAt = null;
-          views = views === 0 ? deterministicViews(p.id) : views;
+          views = 0;
         } else if (action.status === 'Draft') {
           publishedAt = null;
           scheduledAt = null;

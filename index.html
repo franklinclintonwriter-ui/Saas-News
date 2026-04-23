@@ -4,13 +4,18 @@
     <head>
       <meta charset="UTF-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+      <meta http-equiv="Pragma" content="no-cache" />
+      <meta http-equiv="Expires" content="0" />
+      <script type="speculationrules">{"prefetch":[{"source":"list","urls":[]}]}</script>
+      <link rel="preconnect" href="https://tznssjmavvzrnqmmdmty.supabase.co" crossorigin />
+      <link rel="dns-prefetch" href="https://tznssjmavvzrnqmmdmty.supabase.co" />
       <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
       <link rel="shortcut icon" href="/favicon.svg" />
       <link rel="apple-touch-icon" href="/favicon.svg" />
       <meta name="application-name" content="Phulpur24" />
       <meta name="apple-mobile-web-app-capable" content="yes" />
       <meta name="mobile-web-app-capable" content="yes" />
-      <meta name="google-site-verification" content="Scecq8dllrg_egJpIykwEbTZbz2ymYg9JO_eC6NwFOA" />
       <title>Phulpur24</title>
       <script>
         (() => {
@@ -26,10 +31,44 @@
           }
         })();
       </script>
-      <style>html, body { height: 100%; margin: 0; } #root { height: 100%; }</style>
+      <style>
+        html, body { height: 100%; margin: 0; }
+        #root { height: 100%; }
+        #initial-splash {
+          position: fixed;
+          inset: 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 16px;
+          background: #F8FAFC;
+          color: #0F172A;
+          font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+          z-index: 9999;
+        }
+        #initial-splash .ring {
+          width: 40px;
+          height: 40px;
+          border: 3px solid #CBD5F5;
+          border-top-color: #194890;
+          border-radius: 50%;
+          animation: splash-spin 0.9s linear infinite;
+        }
+        #initial-splash p { margin: 0; font-size: 13px; font-weight: 600; }
+        #initial-splash small { color: #6B7280; font-size: 12px; }
+        @keyframes splash-spin { to { transform: rotate(360deg); } }
+        html.dark #initial-splash { background: #0B1220; color: #E2E8F0; }
+        html.dark #initial-splash small { color: #94A3B8; }
+      </style>
     </head>
 
     <body>
+      <div id="initial-splash" role="status" aria-live="polite" aria-busy="true">
+        <span class="ring" aria-hidden="true"></span>
+        <p>Loading newsroom</p>
+        <small>Fetching the latest stories…</small>
+      </div>
       <div id="root"></div>
       <script type="module" src="/src/main.tsx"></script>
     </body>

@@ -58,7 +58,7 @@ export default function LoginPage() {
         <div className="w-full max-w-md rounded-2xl border border-[#E5E7EB] bg-white p-8 shadow-sm">
           <h1 className="text-2xl font-bold tracking-tight text-neutral-900">Admin sign-in</h1>
           <p className="mt-2 text-sm leading-relaxed text-[#6B7280]">
-            Access the editorial console with your API-backed administrator or newsroom account.
+            Access the editorial console with your administrator or newsroom account.
           </p>
 
           <form className="mt-8 space-y-5" onSubmit={onSubmit} noValidate>
@@ -73,7 +73,7 @@ export default function LoginPage() {
                   type="email"
                   autoComplete="username"
                   className="min-h-11 w-full rounded-lg border border-[#E5E7EB] bg-white py-2.5 pl-10 pr-3 text-sm outline-none transition focus:border-[#194890] focus:ring-2 focus:ring-[#194890]/20"
-                  aria-invalid={errors.email ? 'true' : 'false'}
+                    aria-invalid={!!errors.email}
                   {...register('email', { required: 'Email is required.' })}
                 />
               </div>
@@ -91,7 +91,7 @@ export default function LoginPage() {
                   type="password"
                   autoComplete="current-password"
                   className="min-h-11 w-full rounded-lg border border-[#E5E7EB] bg-white py-2.5 pl-10 pr-3 text-sm outline-none transition focus:border-[#194890] focus:ring-2 focus:ring-[#194890]/20"
-                  aria-invalid={errors.password ? 'true' : 'false'}
+                    aria-invalid={!!errors.password}
                   {...register('password', {
                     required: 'Password is required.',
                     minLength: { value: 8, message: 'Use at least 8 characters.' },

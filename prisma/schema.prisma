@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
 }
 
 model User {
@@ -14,8 +14,8 @@ model User {
   role         String       @default("AUTHOR")
   status       String       @default("ACTIVE")
   title        String       @default("")
-  bio          String       @default("") @db.Text
-  avatarUrl    String       @default("") @db.Text
+  bio          String       @default("")
+  avatarUrl    String       @default("")
   location     String       @default("")
   websiteUrl   String       @default("")
   twitterUrl   String       @default("")
@@ -78,15 +78,15 @@ model Post {
   id              String      @id @default(cuid())
   title           String
   slug            String      @unique
-  excerpt         String      @default("") @db.Text
-  content         String      @db.LongText
+  excerpt         String      @default("")
+  content         String
   status          String      @default("DRAFT")
   featured        Boolean     @default(false)
   breaking        Boolean     @default(false)
   seoTitle        String      @default("")
-  metaDescription String      @default("") @db.Text
+  metaDescription String      @default("")
   focusKeyword    String      @default("")
-  canonicalUrl    String      @default("") @db.Text
+  canonicalUrl    String      @default("")
   readTime        String      @default("")
   views           Int         @default(0)
   scheduledAt     DateTime?
@@ -113,7 +113,7 @@ model MediaAsset {
   id              String   @id @default(cuid())
   name            String
   alt             String   @default("")
-  url             String   @db.LongText
+  url             String
   mime            String
   sizeBytes       Int
   width           Int      @default(0)
@@ -134,7 +134,7 @@ model Comment {
   postId    String
   author    String
   email     String
-  content   String   @db.LongText
+  content   String
   status    String   @default("PENDING")
   ipHash    String?
   createdAt DateTime @default(now())
@@ -147,22 +147,22 @@ model Comment {
 
 model SiteSetting {
   id                     String   @id @default("site")
-  siteTitle              String   @default("Phulpur24")
-  tagline                String   @default("Verified local news, analysis, and updates from Phulpur")
-  logoUrl                String   @default("") @db.Text
+  siteTitle              String   @default("")
+  tagline                String   @default("")
+  logoUrl                String   @default("")
   logoAlt                String   @default("")
   logoHeight             Int      @default(40)
   showHeaderLogo         Boolean  @default(true)
   showSiteTitle          Boolean  @default(true)
   showFooterLogo         Boolean  @default(true)
   showFooterSiteTitle    Boolean  @default(true)
-  faviconUrl             String   @default("") @db.Text
-  ogImageUrl             String   @default("") @db.Text
-  siteUrl                String   @default("http://localhost:5174") @db.Text
-  organizationName       String   @default("Phulpur24")
-  defaultSeoTitle        String   @default("Phulpur24 - Local News, Analysis and Updates")
-  defaultMetaDescription String   @default("") @db.Text
-  defaultKeywords        String   @default("") @db.Text
+  faviconUrl             String   @default("")
+  ogImageUrl             String   @default("")
+  siteUrl                String   @default("")
+  organizationName       String   @default("")
+  defaultSeoTitle        String   @default("")
+  defaultMetaDescription String   @default("")
+  defaultKeywords        String   @default("")
   twitterHandle          String   @default("")
   googleSiteVerification String   @default("")
   bingSiteVerification   String   @default("")
@@ -178,22 +178,22 @@ model SiteSetting {
   twitter                String   @default("")
   instagram              String   @default("")
   linkedin               String   @default("")
-  copyright              String   @default("(c) 2026 Phulpur24. All rights reserved.")
+  copyright              String   @default("")
   footerAbout            String   @default("")
   gaId                   String   @default("")
   fbPixel                String   @default("")
-  customTracking         String   @default("") @db.LongText
-  contactEmail           String   @default("contact@phulpur24.com")
-  supportEmail           String   @default("support@phulpur24.com")
-  pressEmail             String   @default("press@phulpur24.com")
-  advertisingEmail       String   @default("ads@phulpur24.com")
-  tipsEmail              String   @default("tips@phulpur24.com")
+  customTracking         String   @default("")
+  contactEmail           String   @default("")
+  supportEmail           String   @default("")
+  pressEmail             String   @default("")
+  advertisingEmail       String   @default("")
+  tipsEmail              String   @default("")
   phone                  String   @default("")
-  address                String   @default("") @db.Text
-  businessHours          String   @default("Sunday-Thursday 9am-6pm")
-  officeLocations        String   @default("") @db.Text
-  newsletterFromName     String   @default("Phulpur24 Team")
-  newsletterFromEmail    String   @default("newsletter@phulpur24.com")
+  address                String   @default("")
+  businessHours          String   @default("")
+  officeLocations        String   @default("")
+  newsletterFromName     String   @default("")
+  newsletterFromEmail    String   @default("")
   newsletterEnabled      Boolean  @default(true)
   dailyDigest            Boolean  @default(false)
   updatedAt              DateTime @updatedAt
@@ -212,11 +212,11 @@ model StaticPage {
   id              String   @id @default(cuid())
   slug            String   @unique
   title           String
-  excerpt         String   @default("") @db.Text
-  content         String   @db.LongText
+  excerpt         String   @default("")
+  content         String
   status          String   @default("PUBLISHED")
   seoTitle        String   @default("")
-  metaDescription String   @default("") @db.Text
+  metaDescription String   @default("")
   updatedAt       DateTime @updatedAt
   createdAt       DateTime @default(now())
 
@@ -229,7 +229,7 @@ model ContactMessage {
   lastName   String
   email      String
   subject    String
-  message    String    @db.LongText
+  message    String
   status     String    @default("NEW")
   ipHash     String?
   userAgent  String?
@@ -247,9 +247,9 @@ model AdPlacement {
   name      String
   placement String
   label     String    @default("Advertisement")
-  imageUrl  String    @default("") @db.Text
-  targetUrl String    @default("") @db.Text
-  html      String    @default("") @db.LongText
+  imageUrl  String    @default("")
+  targetUrl String    @default("")
+  html      String    @default("")
   enabled   Boolean   @default(true)
   startsAt  DateTime?
   endsAt    DateTime?
@@ -300,11 +300,11 @@ model IntegrationSecret {
   label            String
   category         String   @default("GENERAL")
   enabled          Boolean  @default(true)
-  secretCiphertext String   @default("") @db.LongText
+  secretCiphertext String   @default("")
   secretPreview    String   @default("")
   model            String   @default("")
-  endpoint         String   @default("") @db.Text
-  notes            String   @default("") @db.Text
+  endpoint         String   @default("")
+  notes            String   @default("")
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -318,7 +318,7 @@ model AuditLog {
   action     String
   resource   String
   resourceId String?
-  detail     String?  @db.Text
+  detail     String?
   ipHash     String?
   at         DateTime @default(now())
 
