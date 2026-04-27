@@ -1,0 +1,7 @@
+[
+  {
+    "install": "npm install && npx prisma generate",
+    "start": "npm run dev",
+    "resourceSize": "medium"
+  }
+]
