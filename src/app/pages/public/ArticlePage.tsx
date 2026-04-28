@@ -99,7 +99,8 @@ export default function ArticlePage() {
     formState: { errors, isSubmitting },
   } = useForm<CommentForm>({ defaultValues: { body: '', name: '', email: '' } });
 
-  // Increment post view counter once per session per article id.
+  // Fire-and-forget: increment post view counter once per session per article.
+  // Errors are silently swallowed so a failing analytics call never affects the reader.
   useEffect(() => {
     if (!id) return;
     const viewKey = `phulpur24_viewed_${id}`;

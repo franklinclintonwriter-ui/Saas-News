@@ -1805,7 +1805,7 @@ router.post('/admin/jobs/publish-scheduled', asyncHandler(async (req, res) => {
   for (const p of due) {
     await writeAudit({
       actorId: p.authorId ?? undefined,
-      actorEmail: 'scheduler',
+      actorEmail: 'system:scheduler',
       action: 'AUTO_PUBLISH',
       resource: 'Post',
       resourceId: p.id,

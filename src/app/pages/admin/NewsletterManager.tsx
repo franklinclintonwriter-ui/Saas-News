@@ -255,7 +255,7 @@ export default function NewsletterManager() {
             </div>
             <div>
               <label className="mb-2 block text-sm font-semibold">
-                Campaign body <span className="font-normal text-[#6B7280]">(Markdown supported)</span>
+                Campaign body
               </label>
               <textarea
                 value={campaignBody}

@@ -49,7 +49,7 @@ async function resizeImageIfNeeded(file: File): Promise<File> {
       const ctx = canvas.getContext('2d');
       if (!ctx) { resolve(file); return; }
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      const mime = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+      const mime = file.type === 'image/png' ? 'image/png' : file.type === 'image/webp' ? 'image/webp' : 'image/jpeg';
       canvas.toBlob(
         (blob) => {
           if (!blob) { resolve(file); return; }

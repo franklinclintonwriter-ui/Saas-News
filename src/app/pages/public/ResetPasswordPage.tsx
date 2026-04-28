@@ -5,6 +5,8 @@ import { updatePassword } from '../../lib/auth/supabase-auth';
 import { getSupabase, supabaseConfigured } from '../../lib/auth/supabase-client';
 import { useCms } from '../../context/cms-context';
 
+const REDIRECT_DELAY_MS = 1500;
+
 export default function ResetPasswordPage() {
   const { state } = useCms();
   const { settings } = state;
@@ -55,7 +57,7 @@ export default function ResetPasswordPage() {
       } else {
         setDone(true);
         // Redirect to login after a short delay.
-        setTimeout(() => navigate('/login', { replace: true }), 2500);
+        setTimeout(() => navigate('/login', { replace: true }), REDIRECT_DELAY_MS);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to update password. Please try again.');
