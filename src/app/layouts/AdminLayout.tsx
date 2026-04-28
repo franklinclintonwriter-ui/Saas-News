@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, Outlet } from 'react-router';
 import AdminSidebar from '../components/admin/AdminSidebar';
 import AdminTopBar from '../components/admin/AdminTopBar';
+import { SkipToContent } from '../components/SkipToContent';
 import { useCms } from '../context/cms-context';
 
 export default function AdminLayout() {
@@ -81,10 +82,11 @@ export default function AdminLayout() {
 
   return (
     <div className="admin-shell min-h-screen flex">
+      <SkipToContent />
       <AdminSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className="admin-workspace min-w-0 flex-1 lg:ml-[280px]">
         <AdminTopBar onMenuClick={() => setSidebarOpen(true)} />
-        <main className="admin-main px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
+        <main id="main" className="admin-main px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
           <div className="admin-main-inner mx-auto w-full max-w-[1600px]">
             {workspaceBody}
           </div>

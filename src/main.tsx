@@ -1,7 +1,27 @@
 
   import { createRoot } from "react-dom/client";
   import App from "./app/App.tsx";
+  import { ErrorBoundary } from "./app/components/ErrorBoundary.tsx";
+  import { initSentry } from "./app/lib/observability/sentry.ts";
+  import { loadPlausible } from "./app/lib/observability/plausible.ts";
   import "./styles/index.css";
+
+  // Determine the current surface and expose it globally so Plausible and other
+  // surface-gated utilities can read it without importing Vite env vars directly.
+  const configuredSurface = ((import.meta.env.VITE_APP_SURFACE as string | undefined) || 'all').toLowerCase();
+  if (configuredSurface === 'admin') {
+    window.__SURFACE__ = 'admin';
+  } else if (configuredSurface === 'public') {
+    window.__SURFACE__ = 'public';
+  }
+
+  // Boot observability as early as possible so errors during React init are captured.
+  initSentry();
+
+  // Load Plausible only on the public surface (guard is also inside loadPlausible).
+  if (window.__SURFACE__ !== 'admin') {
+    loadPlausible();
+  }
 
   // Auto-recover from stale lazy-chunk loads after a new deploy.
   // When Cloudflare serves a fresh index.html that references new
@@ -27,7 +47,11 @@
   window.addEventListener('error', (e) => maybeReload(e.error ?? e.message));
   window.addEventListener('unhandledrejection', (e) => maybeReload(e.reason));
 
-  createRoot(document.getElementById("root")!).render(<App />);
+  createRoot(document.getElementById("root")!).render(
+    <ErrorBoundary boundary="root">
+      <App />
+    </ErrorBoundary>
+  );
 
   // Remove the inline boot splash once React has committed its first paint.
   requestAnimationFrame(() => {

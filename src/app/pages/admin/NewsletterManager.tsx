@@ -1,9 +1,13 @@
 import { useMemo, useState } from 'react';
-import { Download, MailCheck, Search, Trash2, UserMinus, UserPlus } from 'lucide-react';
+import { Download, Mail, MailCheck, Search, Send, Trash2, UserMinus, UserPlus } from 'lucide-react';
 import { useCms } from '../../context/cms-context';
+import { useAuth } from '../../context/auth-context';
 import { formatShortDate, type NewsletterSubscriber } from '../../lib/admin/cms-state';
+import { hasMinimumRole } from '../../lib/admin/role-access';
 import { toast } from '../../lib/notify';
+import { apiRequest } from '../../lib/api-client';
 import { Button } from '../../components/ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,9 +34,16 @@ function downloadCsv(rows: NewsletterSubscriber[]) {
 
 export default function NewsletterManager() {
   const { state, dispatch } = useCms();
+  const { user, accessToken } = useAuth();
   const [q, setQ] = useState('');
   const [status, setStatus] = useState<'all' | NewsletterSubscriber['status']>('all');
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [campaignSubject, setCampaignSubject] = useState('');
+  const [campaignBody, setCampaignBody] = useState('');
+  const [campaignPreview, setCampaignPreview] = useState('');
+  const [sending, setSending] = useState(false);
+  const canSendCampaign = hasMinimumRole(user?.role, 'EDITOR');
 
   const filtered = useMemo(() => {
     const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -54,6 +65,38 @@ export default function NewsletterManager() {
     toast.success(nextStatus === 'ACTIVE' ? 'Subscriber reactivated.' : 'Subscriber unsubscribed.');
   };
 
+  const sendCampaign = async () => {
+    if (!campaignSubject.trim()) {
+      toast.error('Subject line is required.');
+      return;
+    }
+    if (!campaignBody.trim()) {
+      toast.error('Campaign body is required.');
+      return;
+    }
+    setSending(true);
+    try {
+      await apiRequest('/admin/newsletter/broadcast', {
+        method: 'POST',
+        token: accessToken,
+        body: JSON.stringify({
+          subject: campaignSubject.trim(),
+          body: campaignBody.trim(),
+          previewEmail: campaignPreview.trim() || undefined,
+        }),
+      });
+      toast.success('Campaign sent successfully!');
+      setComposeOpen(false);
+      setCampaignSubject('');
+      setCampaignBody('');
+      setCampaignPreview('');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to send campaign.');
+    } finally {
+      setSending(false);
+    }
+  };
+
   const confirmDelete = () => {
     if (!deleteId) return;
     dispatch({ type: 'NEWSLETTER_SUBSCRIBER_DELETE', id: deleteId });
@@ -69,6 +112,12 @@ export default function NewsletterManager() {
         </div>
       </div>
       <div className="flex flex-wrap items-center justify-end gap-3">
+        {canSendCampaign && (
+          <Button type="button" onClick={() => setComposeOpen(true)}>
+            <Mail size={18} className="mr-2" />
+            Compose Campaign
+          </Button>
+        )}
         <Button type="button" variant="outline" onClick={() => downloadCsv(filtered)}>
           <Download size={18} className="mr-2" />
           Export CSV
@@ -186,6 +235,63 @@ export default function NewsletterManager() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Campaign compose dialog */}
+      <Dialog open={composeOpen} onOpenChange={setComposeOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Compose Newsletter Campaign</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <label className="mb-2 block text-sm font-semibold">Subject line</label>
+              <input
+                type="text"
+                value={campaignSubject}
+                onChange={(e) => setCampaignSubject(e.target.value)}
+                placeholder="e.g., Weekly digest — top stories this week"
+                className="w-full rounded-lg border border-[#E5E7EB] px-4 py-2.5 text-sm outline-none transition focus:border-[#194890] focus:ring-2 focus:ring-[#194890]/15"
+              />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-semibold">
+                Campaign body
+              </label>
+              <textarea
+                value={campaignBody}
+                onChange={(e) => setCampaignBody(e.target.value)}
+                placeholder="Write your newsletter content here. Markdown is rendered in the email."
+                rows={10}
+                className="w-full resize-y rounded-lg border border-[#E5E7EB] px-4 py-3 font-mono text-sm outline-none transition focus:border-[#194890] focus:ring-2 focus:ring-[#194890]/15"
+              />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-semibold">
+                Preview email <span className="font-normal text-[#6B7280]">(optional — send a test copy first)</span>
+              </label>
+              <input
+                type="email"
+                value={campaignPreview}
+                onChange={(e) => setCampaignPreview(e.target.value)}
+                placeholder="your@email.com"
+                className="w-full rounded-lg border border-[#E5E7EB] px-4 py-2.5 text-sm outline-none transition focus:border-[#194890] focus:ring-2 focus:ring-[#194890]/15"
+              />
+            </div>
+            <div className="rounded-lg bg-[#FEF3C7] px-4 py-3 text-sm text-[#92400E]">
+              This will send to <strong>{active}</strong> active subscriber{active !== 1 ? 's' : ''}. This action cannot be undone.
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setComposeOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={sendCampaign} disabled={sending || !campaignSubject.trim() || !campaignBody.trim()}>
+              <Send size={16} className="mr-2" />
+              {sending ? 'Sending…' : 'Send to all active subscribers'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
