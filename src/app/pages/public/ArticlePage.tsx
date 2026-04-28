@@ -15,7 +15,7 @@ import { toast } from '../../lib/notify';
 import AdSlot from '../../components/public/AdSlot';
 import { ArticleMarkdown } from '../../components/articles/ArticleMarkdown';
 import { fetchPublicPostDetail } from '../../lib/api-cms';
-import { API_BASE_URL } from '../../lib/api-client';
+import { API_BASE_URL, apiRequest } from '../../lib/api-client';
 import { useAuth } from '../../context/auth-context';
 
 type CommentForm = {
@@ -96,11 +96,35 @@ export default function ArticlePage() {
     register,
     handleSubmit,
     reset,
-    formState: { errors },
+    formState: { errors, isSubmitting },
   } = useForm<CommentForm>({ defaultValues: { body: '', name: '', email: '' } });
 
-  const onComment = handleSubmit((values) => {
+  // Increment post view counter once per session per article id.
+  useEffect(() => {
+    if (!id) return;
+    const viewKey = `phulpur24_viewed_${id}`;
+    if (sessionStorage.getItem(viewKey)) return;
+    sessionStorage.setItem(viewKey, '1');
+    void apiRequest(`/public/posts/${id}/view`, { method: 'POST' }).catch(() => {
+      // Best-effort — do not surface errors to the reader.
+    });
+  }, [id]);
+
+  const onComment = handleSubmit(async (values) => {
     if (!resolved?.detail?.id) return;
+    try {
+      await apiRequest('/public/comments', {
+        method: 'POST',
+        body: JSON.stringify({
+          postId: resolved.detail.id,
+          author: values.name,
+          email: values.email,
+          content: values.body,
+        }),
+      });
+    } catch {
+      // If the API is unavailable, fall back to local-only (offline mode).
+    }
     dispatch({
       type: 'COMMENT_SUBMIT_PUBLIC',
       postId: resolved.detail.id,
@@ -245,6 +269,26 @@ export default function ArticlePage() {
 
             <ArticleMarkdown content={resolved.body} />
 
+            {/* Tags */}
+            {resolved.post?.tags && resolved.post.tags.length > 0 && (
+              <div className="mt-8 flex flex-wrap items-center gap-2">
+                <span className="text-sm font-semibold text-[#6B7280]">Tags:</span>
+                {resolved.post.tags.map((tagSlug) => {
+                  const tagObj = articleState.tags.find((t) => t.slug === tagSlug);
+                  const label = tagObj?.name ?? tagSlug.replace(/-/g, ' ');
+                  return (
+                    <Link
+                      key={tagSlug}
+                      to={`/tag/${tagSlug}`}
+                      className="rounded-full border border-[#E5E7EB] bg-white px-3 py-1 text-xs font-semibold text-[#475569] capitalize hover:border-[#194890] hover:text-[#194890] transition"
+                    >
+                      {label}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+
             <div className="bg-[#F3F4F6] rounded-lg p-6 mt-12">
               <div className="flex items-start gap-4">
                 <div className="w-20 h-20 bg-[#E8EEF8] text-[#194890] rounded-full flex-shrink-0 overflow-hidden flex items-center justify-center text-xl font-bold" aria-hidden>
@@ -388,9 +432,10 @@ export default function ArticlePage() {
                 </div>
                 <button
                   type="submit"
-                  className="bg-[#194890] text-white px-6 py-2 rounded-lg hover:bg-[#2656A8] transition font-semibold"
+                  disabled={isSubmitting}
+                  className="bg-[#194890] text-white px-6 py-2 rounded-lg hover:bg-[#2656A8] transition font-semibold disabled:opacity-60"
                 >
-                  Post Comment
+                  {isSubmitting ? 'Posting…' : 'Post Comment'}
                 </button>
               </form>
 

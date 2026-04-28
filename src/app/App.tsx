@@ -63,6 +63,10 @@ const publicPages = publicEnabled
       PrivacyPage: lazy(() => import('./pages/public/PrivacyPage')),
       TermsPage: lazy(() => import('./pages/public/TermsPage')),
       StaticContentPage: lazy(() => import('./pages/public/StaticContentPage')),
+      AuthorPage: lazy(() => import('./pages/public/AuthorPage')),
+      TagPage: lazy(() => import('./pages/public/TagPage')),
+      ForgotPasswordPage: lazy(() => import('./pages/public/ForgotPasswordPage')),
+      ResetPasswordPage: lazy(() => import('./pages/public/ResetPasswordPage')),
     }
   : null;
 
@@ -163,6 +167,10 @@ function renderPublicRoutes() {
     PrivacyPage,
     TermsPage,
     StaticContentPage,
+    AuthorPage,
+    TagPage,
+    ForgotPasswordPage,
+    ResetPasswordPage,
   } = publicPages;
 
   return (
@@ -177,12 +185,16 @@ function renderPublicRoutes() {
       <Route index element={<HomePage />} />
       <Route path="article/:id" element={<ArticlePage />} />
       <Route path="category/:slug" element={<CategoryPage />} />
+      <Route path="tag/:slug" element={<TagPage />} />
+      <Route path="author/:id" element={<AuthorPage />} />
       <Route path="search" element={<SearchPage />} />
       <Route path="about" element={<AboutPage />} />
       <Route path="contact" element={<ContactPage />} />
       <Route path="privacy" element={<PrivacyPage />} />
       <Route path="terms" element={<TermsPage />} />
       <Route path="page/:slug" element={<StaticContentPage />} />
+      <Route path="forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="reset-password" element={<ResetPasswordPage />} />
     </Route>
   );
 }

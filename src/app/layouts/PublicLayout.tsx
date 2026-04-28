@@ -3,6 +3,7 @@ import Header from '../components/public/Header';
 import Footer from '../components/public/Footer';
 import BreakingNews from '../components/public/BreakingNews';
 import SeoManager from '../components/public/SeoManager';
+import { SkipToContent } from '../components/SkipToContent';
 import { useCms } from '../context/cms-context';
 
 function formatToday(): string {
@@ -51,6 +52,7 @@ export default function PublicLayout() {
 
   return (
     <div className="min-h-screen bg-background">
+      <SkipToContent />
       <SeoManager />
       <div className="px-4 py-2 text-white" style={{ backgroundColor: settings.primaryColor }}>
         <div className="max-w-[1440px] mx-auto flex items-center justify-between">
@@ -75,7 +77,7 @@ export default function PublicLayout() {
       </div>
       <Header />
       <BreakingNews />
-      <main>
+      <main id="main">
         <Outlet />
       </main>
       <Footer />
