@@ -24,6 +24,46 @@ function formatBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(2)} MB`;
 }
 
+const MAX_IMAGE_WIDTH = 2048;
+const MAX_IMAGE_HEIGHT = 2048;
+
+/** Resize an image file to at most MAX_IMAGE_WIDTH×MAX_IMAGE_HEIGHT using canvas,
+ * preserving aspect ratio. Returns the original file if the browser doesn't
+ * support canvas or if the image is already within bounds. */
+async function resizeImageIfNeeded(file: File): Promise<File> {
+  if (!file.type.startsWith('image/') || file.type === 'image/gif') return file;
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const { naturalWidth: w, naturalHeight: h } = img;
+      if (w <= MAX_IMAGE_WIDTH && h <= MAX_IMAGE_HEIGHT) {
+        resolve(file);
+        return;
+      }
+      const ratio = Math.min(MAX_IMAGE_WIDTH / w, MAX_IMAGE_HEIGHT / h);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(w * ratio);
+      canvas.height = Math.round(h * ratio);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { resolve(file); return; }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const mime = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) { resolve(file); return; }
+          resolve(new File([blob], file.name, { type: mime, lastModified: file.lastModified }));
+        },
+        mime,
+        0.88,
+      );
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+
 function imageDimensions(file: File): Promise<{ width: number; height: number }> {
   if (!file.type.startsWith('image/')) return Promise.resolve({ width: 0, height: 0 });
   return new Promise((resolve) => {
@@ -91,7 +131,8 @@ export default function MediaLibrary() {
     setUploading(true);
     try {
       const uploaded: AdminMedia[] = [];
-      for (const file of Array.from(files)) {
+      for (const rawFile of Array.from(files)) {
+        const file = await resizeImageIfNeeded(rawFile);
         const dimensions = await imageDimensions(file);
         uploaded.push(await uploadAdminMediaFile(file, accessToken, dimensions));
       }

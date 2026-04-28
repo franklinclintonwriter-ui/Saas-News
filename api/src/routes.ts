@@ -18,6 +18,7 @@ import { config } from './config.js';
 import { badRequest, forbidden, notFound, unauthorized } from './errors.js';
 import { aiCapabilities, generateNewsDraft, generatePostImageAsset, parseKeywords } from './ai-news.js';
 import { deleteIntegrationConfig, listIntegrationConfigs, saveIntegrationConfig } from './integrations.js';
+import { sendNewsletterBroadcast, type NewsletterRecipient } from './mailer.js';
 import { prisma } from './prisma.js';
 import { deleteStoredMedia, getStoredMedia, storageStatus, storeDataUrlMedia, storeMediaBuffer } from './storage.js';
 import { asyncHandler, created, hashIp, idParamSchema, ok, safeUser, slugify, writeAudit } from './utils.js';
@@ -1715,6 +1716,105 @@ router.get('/admin/audit-log', requireRole('ADMIN'), validateQuery(paginationSch
     prisma.auditLog.findMany({ orderBy: { at: 'desc' }, skip: (page - 1) * limit, take: limit }),
   ]);
   ok(res, rows, { page, limit, total, totalPages: Math.ceil(total / limit) });
+}));
+
+const newsletterBroadcastSchema = z.object({
+  subject: z.string().min(3).max(200),
+  body: z.string().min(10),
+  previewEmail: z.string().email().optional(),
+});
+
+router.post('/admin/newsletter/broadcast', requireRole('EDITOR'), validateBody(newsletterBroadcastSchema), asyncHandler(async (req, res) => {
+  const { subject, body, previewEmail } = req.body as z.infer<typeof newsletterBroadcastSchema>;
+  const settings = await getSiteSettings();
+  const base = siteUrl(settings);
+
+  if (previewEmail) {
+    // Test send only.
+    const preview: NewsletterRecipient = { email: previewEmail, unsubscribeToken: 'preview-no-token' };
+    const result = await sendNewsletterBroadcast(
+      { id: `preview-${Date.now()}`, subject, bodyHtml: body.replace(/\n/g, '<br>'), siteUrl: base },
+      [preview],
+    );
+    await writeAudit({ actorId: req.user!.id, actorEmail: req.user!.email, action: 'NEWSLETTER_PREVIEW', resource: 'Newsletter', detail: previewEmail, ip: req.ip });
+    return ok(res, { preview: true, ...result });
+  }
+
+  const subscribers = await prisma.newsletterSubscriber.findMany({ where: { status: 'ACTIVE' } });
+  const recipients: NewsletterRecipient[] = subscribers.map((s) => ({
+    email: s.email,
+    unsubscribeToken: s.id,
+  }));
+
+  if (recipients.length === 0) {
+    return ok(res, { sent: 0, failed: 0, skipped: 0, message: 'No active subscribers.' });
+  }
+
+  const campaignId = `campaign-${Date.now()}`;
+  const result = await sendNewsletterBroadcast(
+    { id: campaignId, subject, bodyHtml: body.replace(/\n/g, '<br>'), siteUrl: base },
+    recipients,
+  );
+  await writeAudit({
+    actorId: req.user!.id,
+    actorEmail: req.user!.email,
+    action: 'NEWSLETTER_BROADCAST',
+    resource: 'Newsletter',
+    detail: `${result.sent} sent / ${result.failed} failed — "${subject}"`,
+    ip: req.ip,
+  });
+  return ok(res, result);
+}));
+
+// ---------------------------------------------------------------------------
+// Scheduled post publisher (cron endpoint)
+// ---------------------------------------------------------------------------
+// Call this from a Cloudflare Cron Trigger, an external cron job, or
+// the wrangler.toml `[triggers]` section on a schedule (e.g. every 5 min).
+// Protect with a Bearer token equal to the CRON_SECRET env variable.
+router.post('/admin/jobs/publish-scheduled', asyncHandler(async (req, res) => {
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret) {
+    const authHeader = req.headers.authorization ?? '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    if (token !== cronSecret) {
+      return forbidden('Invalid or missing cron secret.');
+    }
+  }
+
+  const now = new Date();
+  const due = await prisma.post.findMany({
+    where: {
+      status: 'SCHEDULED',
+      scheduledAt: { lte: now },
+      deletedAt: null,
+    },
+    select: { id: true, title: true, authorId: true },
+  });
+
+  if (due.length === 0) {
+    return ok(res, { published: 0, ids: [] });
+  }
+
+  const ids = due.map((p) => p.id);
+  await prisma.post.updateMany({
+    where: { id: { in: ids } },
+    data: { status: 'PUBLISHED', publishedAt: now, scheduledAt: null, updatedAt: now },
+  });
+
+  for (const p of due) {
+    await writeAudit({
+      actorId: p.authorId ?? undefined,
+      actorEmail: 'scheduler',
+      action: 'AUTO_PUBLISH',
+      resource: 'Post',
+      resourceId: p.id,
+      detail: p.title,
+    }).catch(() => null);
+  }
+
+  clearPublicResponseCache();
+  return ok(res, { published: ids.length, ids });
 }));
 
 export default router;

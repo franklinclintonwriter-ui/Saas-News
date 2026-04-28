@@ -33,6 +33,9 @@ Thumbs.db
 .idea/
 .vscode/
 
+# IDE dev-tool configs that should not be committed
+.continue/
+
 # Stray nested clones/workspaces
 saas-magagine*/
 *.code-workspace

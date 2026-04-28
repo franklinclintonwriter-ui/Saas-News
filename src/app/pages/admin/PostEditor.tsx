@@ -9,6 +9,7 @@ import { AiDraftAssistant } from '../../components/admin/AiDraftAssistant';
 import { ArticleMarkdown } from '../../components/articles/ArticleMarkdown';
 import { makeId, slugify, type AdminPost, type AdminUser, type AuthorProfile, type PostStatus } from '../../lib/admin/cms-state';
 import { fetchAdminPostDetail, isExpiredAuthError } from '../../lib/api-cms';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 
 const PREVIEW_KEY_PREFIX = 'phulpur24_post_preview_';
 
@@ -100,6 +101,8 @@ export default function PostEditor() {
   const [tagInput, setTagInput] = useState('');
   const [lastSaved, setLastSaved] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
+  const [mediaPickerTarget, setMediaPickerTarget] = useState<'featured' | 'inline'>('featured');
 
   const isEditing = !!id;
   const canEditAnyPost = hasMinimumRole(user?.role, 'EDITOR');
@@ -216,6 +219,18 @@ export default function PostEditor() {
     if (!id) navigate(`/admin/posts/edit/${next.id}`, { replace: true });
   }, [canMutatePost, dispatch, id, navigate, post]);
 
+  // Cmd+S / Ctrl+S keyboard shortcut — save draft.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        saveDraft();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [saveDraft]);
+
   const openPreview = useCallback(() => {
     if (!post.title.trim()) {
       toast.error('Add a title before preview.');
@@ -325,6 +340,29 @@ export default function PostEditor() {
     toast.message(`${kind === 'image' ? 'Image' : kind === 'quote' ? 'Quote' : 'Heading'} block inserted.`);
   };
 
+  const openMediaPicker = (target: 'featured' | 'inline') => {
+    if (!canMutatePost) {
+      toast.error('You can only edit your own posts.');
+      return;
+    }
+    setMediaPickerTarget(target);
+    setMediaPickerOpen(true);
+  };
+
+  const selectMediaItem = (mediaId: string) => {
+    const item = state.media.find((m) => m.id === mediaId);
+    if (!item) return;
+    if (mediaPickerTarget === 'featured') {
+      setPost((p) => ({ ...p, featuredImageId: item.id }));
+      toast.success('Featured image updated from library.');
+    } else {
+      const mdSnippet = `\n\n![${item.alt || item.name}](${item.url})\n\n`;
+      setPost((p) => ({ ...p, content: p.content + mdSnippet }));
+      toast.message('Image inserted into content.');
+    }
+    setMediaPickerOpen(false);
+  };
+
   const addTag = (value: string) => {
     const next = slugify(value);
     if (!next) return;
@@ -337,6 +375,7 @@ export default function PostEditor() {
   };
 
   return (
+    <>
     <div className="space-y-6">
       <div className="rounded-xl border border-[#E5E7EB] bg-white px-4 py-4 md:px-6">
         <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
@@ -448,6 +487,12 @@ export default function PostEditor() {
                           <ImageIcon size={14} />
                           Image
                         </button>
+                        {state.media.filter((m) => m.mime.startsWith('image/')).length > 0 && (
+                          <button type="button" onClick={() => openMediaPicker('inline')} className="inline-flex items-center gap-1 rounded-md border border-[#E2E8F0] bg-white px-2 py-1 text-xs font-semibold text-[#194890] hover:bg-[#F0F4FF]">
+                            <ImageIcon size={14} />
+                            Library
+                          </button>
+                        )}
                       </div>
                     </div>
                     <textarea
@@ -613,16 +658,28 @@ export default function PostEditor() {
           <div className="bg-white rounded-lg p-6 border border-[#E5E7EB]">
             <h3 className="font-bold mb-4">Featured Image</h3>
             <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onFeaturedFile} />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={!canMutatePost}
-              className="w-full border-2 border-dashed border-[#E5E7EB] rounded-lg p-8 text-center hover:border-[#194890]/40 transition disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Upload className="mx-auto mb-2 text-[#6B7280]" size={32} />
-              <p className="text-sm text-[#6B7280] mb-2">Upload or replace featured image</p>
-              <p className="text-xs text-[#9CA3AF]">PNG, JPG up to ~10MB (synced to the API media library)</p>
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={!canMutatePost}
+                className="flex-1 border-2 border-dashed border-[#E5E7EB] rounded-lg p-5 text-center hover:border-[#194890]/40 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Upload className="mx-auto mb-2 text-[#6B7280]" size={24} />
+                <p className="text-xs text-[#6B7280]">Upload image</p>
+              </button>
+              {state.media.filter((m) => m.mime.startsWith('image/')).length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => openMediaPicker('featured')}
+                  disabled={!canMutatePost}
+                  className="flex-1 border-2 border-dashed border-[#E5E7EB] rounded-lg p-5 text-center hover:border-[#194890]/40 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ImageIcon className="mx-auto mb-2 text-[#6B7280]" size={24} />
+                  <p className="text-xs text-[#6B7280]">Pick from library</p>
+                </button>
+              )}
+            </div>
             {featuredImage && (
               <div className="mt-4 rounded-lg border border-[#E5E7EB] overflow-hidden">
                 <img src={featuredImage.url} alt={featuredImage.alt} className="w-full h-40 object-cover" />
@@ -737,5 +794,50 @@ export default function PostEditor() {
         </div>
       </div>
     </div>
+
+    {/* Media picker dialog */}
+    <Dialog open={mediaPickerOpen} onOpenChange={setMediaPickerOpen}>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>
+            {mediaPickerTarget === 'featured' ? 'Pick featured image' : 'Insert image from library'}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="max-h-[60vh] overflow-y-auto">
+          {state.media.filter((m) => m.mime.startsWith('image/')).length === 0 ? (
+            <p className="py-8 text-center text-sm text-[#6B7280]">No images in the media library yet. Upload one first.</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 p-1">
+              {state.media
+                .filter((m) => m.mime.startsWith('image/'))
+                .map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => selectMediaItem(m.id)}
+                    className={`group relative overflow-hidden rounded-lg border-2 transition ${
+                      post.featuredImageId === m.id && mediaPickerTarget === 'featured'
+                        ? 'border-[#194890]'
+                        : 'border-transparent hover:border-[#194890]/40'
+                    }`}
+                  >
+                    <div className="aspect-video w-full overflow-hidden bg-[#E5E7EB]">
+                      <img
+                        src={m.url}
+                        alt={m.alt || m.name}
+                        loading="lazy"
+                        decoding="async"
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                    <p className="truncate px-1 py-1.5 text-left text-xs text-[#6B7280]">{m.name}</p>
+                  </button>
+                ))}
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
